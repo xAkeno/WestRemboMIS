@@ -31,10 +31,12 @@ class BarangayBuildingClearance extends Model
         'punong_barangay',
         'for_the_punong_barangay',
         'barangay_position',
+        'created_at'
     ];
 
     protected $casts = [
         'issued_date' => 'date',
+        'created_at' => 'date',
     ];
 }
 

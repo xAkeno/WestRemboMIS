@@ -105,6 +105,15 @@ class BarangayBusinessClearanceController extends Controller
             'data' => $barangayBusinessClearance->fresh(),
         ]);
     }
+    public function total(Request $request){
+        $total = BarangayBusinessClearance::count();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Business clearance total successfully',
+            'data' => $total,
+        ]);
+    }
 
     /**
      * Remove the specified resource from storage.

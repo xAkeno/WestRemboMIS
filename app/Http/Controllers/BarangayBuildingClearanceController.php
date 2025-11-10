@@ -16,6 +16,8 @@ class BarangayBuildingClearanceController extends Controller
     {
         $query = BarangayBuildingClearance::query();
 
+        
+
         // Search functionality
         if ($request->has('search')) {
             $search = $request->search;
@@ -40,6 +42,17 @@ class BarangayBuildingClearanceController extends Controller
             'status' => 'success',
             'message' => 'Building clearances retrieved successfully',
             'data' => $clearances,
+        ]);
+    }
+    
+    // Get total number of building clearances
+    public function total(Request $request){
+        $total = BarangayBuildingClearance::count();
+
+        return response()->json([
+            "status" => "success",
+            "message" => "Total building clearances retrieved successfully",
+            "data" => $query,
         ]);
     }
 

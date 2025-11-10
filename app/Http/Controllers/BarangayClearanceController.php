@@ -41,6 +41,15 @@ class BarangayClearanceController extends Controller
             'data' => $clearances,
         ]);
     }
+    public function total(Request $request){
+        $total = BarangayClearance::count();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Barangay clearances total retrieved successfully',
+            'data' => $total,
+        ]);
+    }
 
     /**
      * Store a newly created resource in storage.

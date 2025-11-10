@@ -43,6 +43,17 @@ class ResidentController extends Controller
         ]);
     }
 
+    public function total(Request $request){
+
+        $total = Resident::count();
+
+        return response()->json([
+            "status" => "success",
+            "messege" => "Resident total retrieved successfully",
+            "data" => $total
+        ]);
+    }
+
     /**
      * Store a newly created resource in storage.
      */

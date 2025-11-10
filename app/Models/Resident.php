@@ -45,11 +45,13 @@ class Resident extends Model
         'email_address',
         'notes',
         'photo',
+        'created_at',
     ];
 
     protected $casts = [
         'record_create_date' => 'datetime',
         'date_of_birth' => 'date',
+        'created_at' => 'date'
     ];
 }
 

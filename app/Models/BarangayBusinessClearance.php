@@ -35,12 +35,14 @@ class BarangayBusinessClearance extends Model
         'punong_barangay',
         'for_the_punong_barangay',
         'barangay_position',
+        'created_at',
     ];
 
     protected $casts = [
         'issued_date' => 'date',
         'date_of_inspection' => 'date',
         'capital' => 'decimal:2',
+        'created_at',
     ];
 }
 

@@ -35,12 +35,14 @@ class BarangayClearance extends Model
         'issued_on',
         'or_no',
         'bomarke',
+        'created_at',
     ];
 
     protected $casts = [
         'issued_date' => 'date',
         'dob' => 'date',
         'issued_on' => 'date',
+        'created_at' => 'created_at'
     ];
 }
 
