@@ -51,6 +51,8 @@ class BarangaCertificateController extends Controller
     public function store(StoreBarangayCertificateRequest $request){
         try{
             $data = $request->validated();
+
+            $data["created_by"] = auth()->id();
             return response()->json([
                 "status" => "success",
                 "message" => "Barangay Certificate created successfully",

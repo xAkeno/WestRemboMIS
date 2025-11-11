@@ -67,7 +67,7 @@ class ResidentController extends Controller
             $photoPath = $photo->store('residents/photos', 'public');
             $data['photo'] = $photoPath;
         }
-
+        $data["created_by"] = auth()->id();
         $resident = Resident::create($data);
 
         return response()->json([

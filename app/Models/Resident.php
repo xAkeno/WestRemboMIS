@@ -53,5 +53,8 @@ class Resident extends Model
         'date_of_birth' => 'date',
         'created_at' => 'date'
     ];
+    public function created_by(){
+        return $this->belongTo(User::class);
+    }
 }
 

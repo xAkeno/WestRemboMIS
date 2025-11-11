@@ -38,6 +38,7 @@ return new class extends Migration
             $table->string('punong_barangay')->nullable();
             $table->string('for_the_punong_barangay')->nullable();
             $table->string('barangay_position')->nullable();
+            $table->foreignId('created_by')->constrained("users")->onDelete("cascade");
             $table->timestamps();
         });
     }

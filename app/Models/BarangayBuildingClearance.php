@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-
+use App\Models\User;
 class BarangayBuildingClearance extends Model
 {
     use HasFactory;
@@ -38,5 +38,8 @@ class BarangayBuildingClearance extends Model
         'issued_date' => 'date',
         'created_at' => 'date',
     ];
+    public function created_by(){
+        return $this->belongTo(User::class);
+    }
 }
 

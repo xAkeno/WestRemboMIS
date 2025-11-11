@@ -62,6 +62,9 @@ class BarangayBuildingClearanceController extends Controller
     public function store(StoreBarangayBuildingClearanceRequest $request)
     {
         $data = $request->validated();
+
+        $date["created_by"] = auth()->id();
+
         $clearance = BarangayBuildingClearance::create($data);
 
         return response()->json([

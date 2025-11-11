@@ -4,11 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-
+use App\Models\User;
 class BarangayBusinessClearance extends Model
 {
     use HasFactory;
-
     protected $fillable = [
         'trans_number',
         'bcert_number',
@@ -44,5 +43,8 @@ class BarangayBusinessClearance extends Model
         'capital' => 'decimal:2',
         'created_at',
     ];
+    public function created_by(){
+        return $this->belongTo(User::class);
+    }
 }
 

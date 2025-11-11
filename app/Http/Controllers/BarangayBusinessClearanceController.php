@@ -51,6 +51,8 @@ class BarangayBusinessClearanceController extends Controller
     {
         $data = $request->validated();
 
+        $data["created_by"] = auth()->id();
+
         // Handle attachment upload
         if ($request->hasFile('attachment')) {
             $attachment = $request->file('attachment');

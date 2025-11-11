@@ -3,7 +3,7 @@
 
     use Illuminate\Database\Eloquent\Factories\HasFactory;
     use Illuminate\Database\Eloquent\Model;
-
+    use App\Models\User;
     class BarangayCertificate extends Model{
         use HasFactory;
 
@@ -38,5 +38,8 @@
             'created_at' => 'date',
             'age' => 'integer',
         ];
+        public function created_by(){
+            return $this->belongTo(User::class);
+        }
     }
 ?>
