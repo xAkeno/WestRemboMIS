@@ -23,7 +23,6 @@ class StoreResidentRequest extends FormRequest
     {
         return [
             'resident_id' => 'required|string|unique:residents,resident_id|max:50',
-            'record_create_date' => 'nullable|date',
             'prefix' => 'nullable|string|max:10',
             'surname' => 'required|string|max:100',
             'first_name' => 'required|string|max:100',

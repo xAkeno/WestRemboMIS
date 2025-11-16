@@ -5,12 +5,12 @@ use Illuminate\Http\Request;
 use App\Models\BarangayCertificate;
 use App\Http\Requests\StoreBarangayCertificateRequest;
 use App\Http\Requests\UpdateBarangayCertificateRequest;
-
+use Illuminate\Support\Facades\Log;
 class BarangaCertificateController extends Controller
 {
     public function index(Request $request){
         try{
-            $query = BarangayCertificate::querty();
+            $query = BarangayCertificate::query();
 
             $columns = [
                 'trans_number', 'bcert_number', 'firstname', 'middle_name', 'surname', 
@@ -32,7 +32,7 @@ class BarangaCertificateController extends Controller
             }
 
             $per_page = $request->get("per_page",15);
-            $data = $request->orderBy("created_at","desc")->paginate($per_page);
+            $data = $query->orderBy("created_at","desc")->paginate($per_page);
 
             return response()->json([
                 "status" => "success",
@@ -52,11 +52,13 @@ class BarangaCertificateController extends Controller
         try{
             $data = $request->validated();
 
-            $data["created_by"] = auth()->id();
+            // $data["created_by"] = auth()->id();
+            Log::info('POST /api/barangay-certificates hit');
+            $barangaCertificate = BarangayCertificate::create($data);
             return response()->json([
                 "status" => "success",
                 "message" => "Barangay Certificate created successfully",
-                "data" => $data,
+                "data" => $barangaCertificate,
             ]);
         }catch(\Exception $e){
             return response()->json([
@@ -86,7 +88,7 @@ class BarangaCertificateController extends Controller
         }
     }
 
-    public function delete(BarangayCertificate $request){
+    public function destroy(BarangayCertificate $request){
         try{
             $request->delete();
             return response()->json([

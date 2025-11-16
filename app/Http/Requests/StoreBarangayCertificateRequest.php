@@ -10,7 +10,6 @@
         public function rules(): array
         {
             return [
-                'trans_number' => 'required|string|max:50',
                 'bcert_number' => 'required|string|max:50',
                 'issued_date' => 'required|date',
                 'prefix' => 'nullable|string|max:10',

@@ -30,21 +30,21 @@ class BarangayBusinessClearance extends Model
         'inspected_by',
         'date_of_inspection',
         'inspection_remarks',
-        'attachment',
         'punong_barangay',
         'for_the_punong_barangay',
-        'barangay_position',
-        'created_at',
+        'barangay_position'
     ];
 
     protected $casts = [
         'issued_date' => 'date',
         'date_of_inspection' => 'date',
         'capital' => 'decimal:2',
-        'created_at',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
-    public function created_by(){
-        return $this->belongTo(User::class);
-    }
+
+    // public function created_by(){
+    //     return $this->belongTo(User::class);
+    // }
 }
 

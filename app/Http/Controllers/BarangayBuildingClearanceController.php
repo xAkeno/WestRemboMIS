@@ -63,7 +63,7 @@ class BarangayBuildingClearanceController extends Controller
     {
         $data = $request->validated();
 
-        $date["created_by"] = auth()->id();
+        // $date["created_by"] = auth()->id();
 
         $clearance = BarangayBuildingClearance::create($data);
 

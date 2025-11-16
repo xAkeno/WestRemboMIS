@@ -30,16 +30,15 @@ class BarangayBuildingClearance extends Model
         'remarks',
         'punong_barangay',
         'for_the_punong_barangay',
-        'barangay_position',
-        'created_at'
+        'barangay_position'
     ];
 
     protected $casts = [
         'issued_date' => 'date',
         'created_at' => 'date',
     ];
-    public function created_by(){
-        return $this->belongTo(User::class);
-    }
+    // public function created_by(){
+    //     return $this->belongTo(User::class);
+    // }
 }
 

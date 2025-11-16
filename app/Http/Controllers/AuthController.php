@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -43,41 +44,29 @@ class AuthController extends Controller
      */
     public function login(Request $request)
     {
-        try{
-            $request->validate([
-                'email' => 'required|email',
-                'password' => 'required',
-            ]);
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required',
+        ]);
 
-            $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)->first();
 
-            if (!$user || !Hash::check($request->password, $user->password)) {
-                throw ValidationException::withMessages([
-                    'email' => ['The provided credentials are incorrect.'],
-                ]);
-            }
-
-            $token = $user->createToken('auth_token')->plainTextToken;
-
+        if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([
-                'status' => 'success',
-                'message' => 'Login successful',
-                'data' => [
-                    'user' => $user,
-                    'token' => $token,
-                ],
-            ]);
-        }catch(\Exception $e){
-            return response()->json([
-                "status" => "Failed",
-                "message" => "Something in the server must have happen"
-            ],500);
+                'status' => 'failed',
+                'message' => 'Invalid credentials'
+            ], 401);
         }
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+        $cookie = cookie('auth_token', $token, 60 * 24 * 30,null,null,true,true,false,"None"); // 30 days
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Login successful',
+        ])->withCookie($cookie);
     }
 
-    /**
-     * Logout user and revoke token
-     */
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
@@ -85,8 +74,11 @@ class AuthController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Logged out successfully',
-            'data' => null,
         ]);
     }
+
+    /**
+     * Logout user and revoke token
+     */
 }
 

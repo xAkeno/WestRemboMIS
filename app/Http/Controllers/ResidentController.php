@@ -62,12 +62,12 @@ class ResidentController extends Controller
         $data = $request->validated();
 
         // Handle photo upload
-        if ($request->hasFile('photo')) {
-            $photo = $request->file('photo');
-            $photoPath = $photo->store('residents/photos', 'public');
-            $data['photo'] = $photoPath;
-        }
-        $data["created_by"] = auth()->id();
+        // if ($request->hasFile('photo')) {
+        //     $photo = $request->file('photo');
+        //     $photoPath = $photo->store('residents/photos', 'public');
+        //     $data['photo'] = $photoPath;
+        // }
+        // $data["created_by"] = auth()->id();
         $resident = Resident::create($data);
 
         return response()->json([

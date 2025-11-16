@@ -51,14 +51,14 @@ class BarangayBusinessClearanceController extends Controller
     {
         $data = $request->validated();
 
-        $data["created_by"] = auth()->id();
+        // $data["created_by"] = auth()->id();
 
-        // Handle attachment upload
-        if ($request->hasFile('attachment')) {
-            $attachment = $request->file('attachment');
-            $attachmentPath = $attachment->store('clearances/business/attachments', 'public');
-            $data['attachment'] = $attachmentPath;
-        }
+        // // Handle attachment upload
+        // if ($request->hasFile('attachment')) {
+        //     $attachment = $request->file('attachment');
+        //     $attachmentPath = $attachment->store('clearances/business/attachments', 'public');
+        //     $data['attachment'] = $attachmentPath;
+        // }
 
         $clearance = BarangayBusinessClearance::create($data);
 

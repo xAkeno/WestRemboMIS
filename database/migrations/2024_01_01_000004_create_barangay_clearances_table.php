@@ -38,7 +38,8 @@ return new class extends Migration
             $table->date('issued_on')->nullable();
             $table->string('or_no')->nullable();
             $table->string('bomarke')->nullable();
-            $table->foreignId('created_by')->constrained("users")->onDelete("cascade");
+            // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
+
             $table->timestamps();
         });
     }

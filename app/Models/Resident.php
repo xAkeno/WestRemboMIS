@@ -12,7 +12,6 @@ class Resident extends Model
 
     protected $fillable = [
         'resident_id',
-        'record_create_date',
         'prefix',
         'surname',
         'first_name',
@@ -45,17 +44,15 @@ class Resident extends Model
         'phone_number',
         'email_address',
         'notes',
-        'photo',
-        'created_at',
+        'photo'
     ];
 
     protected $casts = [
         'record_create_date' => 'datetime',
-        'date_of_birth' => 'date',
-        'created_at' => 'date'
+        'date_of_birth' => 'date'
     ];
-    public function created_by(){
-        return $this->belongTo(User::class);
-    }
+    // public function created_by(){
+    //     return $this->belongTo(User::class);
+    // }
 }
 

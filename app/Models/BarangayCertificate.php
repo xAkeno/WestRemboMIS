@@ -8,7 +8,6 @@
         use HasFactory;
 
         protected $fillable = [
-            'trans_number',
             'bcert_number',
             'issued_date',
             'prefix',
@@ -38,8 +37,8 @@
             'created_at' => 'date',
             'age' => 'integer',
         ];
-        public function created_by(){
-            return $this->belongTo(User::class);
-        }
+        // public function created_by(){
+        //     return $this->belongTo(User::class);
+        // }
     }
 ?>

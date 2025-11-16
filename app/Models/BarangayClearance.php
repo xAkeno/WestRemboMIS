@@ -34,8 +34,7 @@ class BarangayClearance extends Model
         'issued_at',
         'issued_on',
         'or_no',
-        'bomarke',
-        'created_at',
+        'bomarke'
     ];
 
     protected $casts = [
@@ -44,8 +43,8 @@ class BarangayClearance extends Model
         'issued_on' => 'date',
         'created_at' => 'created_at'
     ];
-    public function created_by(){
-        return $this->belongTo(User::class);
-    }
+    // public function created_by(){
+    //     return $this->belongTo(User::class);
+    // }
 }
 
