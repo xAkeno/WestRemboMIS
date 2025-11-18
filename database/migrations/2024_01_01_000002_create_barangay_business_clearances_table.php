@@ -34,6 +34,7 @@ return new class extends Migration
             $table->text('inspectedRemarks')->nullable();
             $table->date('dateInspected')->nullable();
             $table->text('inspectedNote')->nullable();
+            $table->string('status',50)->nullable();
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
 
             $table->timestamps();

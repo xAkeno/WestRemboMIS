@@ -50,6 +50,7 @@ return new class extends Migration
             $table->string('email_address')->nullable();
             $table->text('notes')->nullable();
             $table->string('photo')->nullable();
+            $table->string('status',50)->nullable();
             $table->timestamps();
         });
     }

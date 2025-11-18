@@ -77,33 +77,40 @@ class BarangayClearanceController extends Controller
 
     public function chartData(Request $request)
     {
-        $filter = $request->filter_date ?? 'this_month';
+        $filter = $request->filter_date ?? 'month';
+        $from = $request->from ?? null;
+        $to = $request->to ?? null;
         
         $query = BarangayClearance::query();
 
-        if ($filter === 'this_week') {
-            $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
-                ->selectRaw('DAYNAME(created_at) as period, COUNT(*) as count')
-                ->groupBy('period');
-        } elseif ($filter === 'this_month') {
-            $query->whereMonth('created_at', now()->month)
-                ->whereYear('created_at', now()->year)
-                ->selectRaw('DAY(created_at) as period, COUNT(*) as count')
-                ->groupBy('period');
-        } elseif ($filter === 'this_year') {
-            $query->whereYear('created_at', now()->year)
-                ->selectRaw('MONTHNAME(created_at) as period, COUNT(*) as count')
-                ->groupBy('period');
-        }
-
         // Custom from-to range
-        if ($request->has('from') && $request->has('to')) {
+        if ($from && $to) {
             $query->whereBetween('created_at', [
-                $request->from . ' 00:00:00',
-                $request->to . ' 23:59:59'
+                $from . ' 00:00:00',
+                $to . ' 23:59:59'
             ])
             ->selectRaw('DATE(created_at) as period, COUNT(*) as count')
-            ->groupBy('period');
+            ->groupBy('period')
+            ->orderBy('period');
+        } else {
+            // Predefined filters
+            if ($filter === 'week') {
+                $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
+                    ->selectRaw('DAYOFWEEK(created_at) as day_num, DAYNAME(created_at) as period, COUNT(*) as count')
+                    ->groupBy('day_num', 'period')
+                    ->orderBy('day_num');
+            } elseif ($filter === 'month') {
+                $query->whereMonth('created_at', now()->month)
+                    ->whereYear('created_at', now()->year)
+                    ->selectRaw('DAY(created_at) as period, COUNT(*) as count')
+                    ->groupBy('period')
+                    ->orderBy('period');
+            } elseif ($filter === 'year') {
+                $query->whereYear('created_at', now()->year)
+                    ->selectRaw('MONTH(created_at) as month_num, MONTHNAME(created_at) as period, COUNT(*) as count')
+                    ->groupBy('month_num', 'period')
+                    ->orderBy('month_num');
+            }
         }
 
         $data = $query->get();
@@ -138,7 +145,8 @@ class BarangayClearanceController extends Controller
         $data = $request->validated();
 
         $data['bcert_number'] = $newRecord;
-        
+        $data['status'] = "PENDING";
+
 
         // $data["created_by"] = auth()->id();
         $clearance = BarangayClearance::create($data);

@@ -37,6 +37,7 @@ return new class extends Migration
             $table->text('purpose_details')->nullable();
             $table->string('punong_barangay', 100)->nullable();
             $table->string('for_the_punong_barangay', 100)->nullable();
+            $table->string('status',50)->nullable();
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
 
             $table->timestamps();
