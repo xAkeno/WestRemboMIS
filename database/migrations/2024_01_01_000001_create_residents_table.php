@@ -9,11 +9,14 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
+
+    protected $primaryKey = 'resident_id';
+    public $incrementing = false; 
+    protected $keyType = 'string';
     public function up(): void
     {
         Schema::create('residents', function (Blueprint $table) {
-            $table->id();
-            $table->string('resident_id')->unique();
+            $table->string('resident_id')->primary();
             $table->string('prefix')->nullable();
             $table->string('surname')->required();
             $table->string('first_name')->required();

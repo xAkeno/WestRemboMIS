@@ -10,6 +10,10 @@ class Resident extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'resident_id';
+    public $incrementing = false;
+    protected $keyType = 'string';
+
     protected $fillable = [
         'resident_id',
         'prefix',

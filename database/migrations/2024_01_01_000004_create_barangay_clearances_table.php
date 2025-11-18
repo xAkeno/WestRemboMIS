@@ -9,11 +9,11 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
+
     public function up(): void
     {
         Schema::create('barangay_clearances', function (Blueprint $table) {
             $table->id();
-            $table->string('trans_number')->nullable();
             $table->string('bcert_number')->nullable();
             $table->date('issued_date')->nullable();
             $table->string('prefix')->nullable();
@@ -37,7 +37,7 @@ return new class extends Migration
             $table->string('issued_at')->nullable();
             $table->date('issued_on')->nullable();
             $table->string('or_no')->nullable();
-            $table->string('bomarke')->nullable();
+            $table->string('remarks')->nullable();
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
 
             $table->timestamps();

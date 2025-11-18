@@ -10,7 +10,6 @@ class BarangayClearance extends Model
     use HasFactory;
 
     protected $fillable = [
-        'trans_number',
         'bcert_number',
         'issued_date',
         'prefix',
@@ -34,14 +33,13 @@ class BarangayClearance extends Model
         'issued_at',
         'issued_on',
         'or_no',
-        'bomarke'
+        'remarks'
     ];
 
     protected $casts = [
         'issued_date' => 'date',
         'dob' => 'date',
         'issued_on' => 'date',
-        'created_at' => 'created_at'
     ];
     // public function created_by(){
     //     return $this->belongTo(User::class);

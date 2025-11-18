@@ -9,38 +9,33 @@ class BarangayBusinessClearance extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'trans_number',
-        'bcert_number',
-        'issued_date',
+        'brgyBusinessNo',
+        'issuedDate',
         'prefix',
         'surname',
-        'first_name',
-        'middle_name',
-        'ext_name',
-        'business_name',
-        'business_type',
-        'business_details',
+        'firstname',
+        'middlename',
+        'ext',
+        'businessName',
+        'businessType',
+        'businessDetails',
         'capital',
-        'house_block_lot_no',
+        'houseBlockLotNo',
         'street',
         'zone',
-        'contact_no',
-        'or_no',
-        'remarks',
-        'inspected_by',
-        'date_of_inspection',
-        'inspection_remarks',
-        'punong_barangay',
-        'for_the_punong_barangay',
-        'barangay_position'
+        'orNo',
+        'inspectedBy',
+        'dateOfInspection',
+        'inspectionRemarks',
+        'inspectedRemarks',
+        'dateInspected',
+        'inspectedNote'
     ];
 
     protected $casts = [
-        'issued_date' => 'date',
-        'date_of_inspection' => 'date',
+        'issuedDate' => 'date',
+        'dateOfInspection' => 'date',
         'capital' => 'decimal:2',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
     ];
 
     // public function created_by(){
