@@ -13,31 +13,29 @@ return new class extends Migration
     {
         Schema::create('barangay_business_clearances', function (Blueprint $table) {
             $table->id();
-            $table->string('trans_number')->nullable();
-            $table->string('bcert_number')->nullable();
-            $table->date('issued_date')->nullable();
+            $table->string('brgyBusinessNo')->nullalble();
+            $table->date('issuedDate')->nullable();
             $table->string('prefix')->nullable();
             $table->string('surname')->nullable();
-            $table->string('first_name')->nullable();
-            $table->string('middle_name')->nullable();
-            $table->string('ext_name')->nullable();
-            $table->string('business_name')->nullable();
-            $table->string('business_type')->nullable();
-            $table->text('business_details')->nullable();
+            $table->string('firstname')->nullable();
+            $table->string('middlename')->nullable();
+            $table->string('ext')->nullable();
+            $table->string('businessName')->nullable();
+            $table->string('businessType')->nullable();
+            $table->text('businessDetails')->nullable();
             $table->decimal('capital', 15, 2)->nullable();
-            $table->string('house_block_lot_no')->nullable();
+            $table->string('houseBlockLotNo')->nullable();
             $table->string('street')->nullable();
             $table->string('zone')->nullable();
-            $table->string('contact_no')->nullable();
-            $table->string('or_no')->nullable();
-            $table->text('remarks')->nullable();
-            $table->string('inspected_by')->nullable();
-            $table->date('date_of_inspection')->nullable();
-            $table->text('inspection_remarks')->nullable();
-            $table->string('attachment')->nullable();
-            $table->string('punong_barangay')->nullable();
-            $table->string('for_the_punong_barangay')->nullable();
-            $table->string('barangay_position')->nullable();
+            $table->string('orNo')->nullable();
+            $table->string('inspectedBy')->nullable();
+            $table->date('dateOfInspection')->nullable();
+            $table->text('inspectionRemarks')->nullable();
+            $table->text('inspectedRemarks')->nullable();
+            $table->date('dateInspected')->nullable();
+            $table->text('inspectedNote')->nullable();
+            // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
+
             $table->timestamps();
         });
     }

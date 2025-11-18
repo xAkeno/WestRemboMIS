@@ -15,31 +15,121 @@ class ResidentController extends Controller
      */
     public function index(Request $request)
     {
+        try {
+            $query = Resident::query();
+
+            // Search functionality
+            if ($request->has('search')) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('surname', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('resident_id', 'like', "%{$search}%")
+                    ->orWhere('zone', 'like', "%{$search}%");
+                });
+            }
+
+            // Filter by zone
+            if ($request->has('zone')) {
+                $query->where('zone', $request->zone);
+            }
+
+            // Filter by date
+            if ($request->has('filter_date')) {
+                $filter = $request->filter_date;
+
+                if ($filter === 'this_week') {
+                    $query->whereBetween('created_at', [
+                        now()->startOfWeek(),
+                        now()->endOfWeek()
+                    ]);
+                } elseif ($filter === 'this_month') {
+                    $query->whereMonth('created_at', now()->month)
+                        ->whereYear('created_at', now()->year);
+                } elseif ($filter === 'this_year') {
+                    $query->whereYear('created_at', now()->year);
+                }
+            }
+
+            // Filter by from-to dates
+            if ($request->has('from') && $request->has('to')) {
+                $query->whereBetween('created_at', [
+                    $request->from . ' 00:00:00',
+                    $request->to . ' 23:59:59'
+                ]);
+            }
+
+            // Filter by status (commented out for now)
+            // if ($request->has('status')) {
+            //     $query->where('status', $request->status);
+            // }
+
+            $perPage = $request->get('per_page', 15);
+            $residents = $query->orderBy('created_at', 'desc')->paginate($perPage);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Residents retrieved successfully',
+                'data' => $residents,
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An error occurred while getting Residents: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function chartData(Request $request)
+    {
+        $filter = $request->filter_date ?? 'this_month';
+        
         $query = Resident::query();
 
-        // Search functionality
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->where('surname', 'like', "%{$search}%")
-                  ->orWhere('first_name', 'like', "%{$search}%")
-                  ->orWhere('resident_id', 'like', "%{$search}%")
-                  ->orWhere('zone', 'like', "%{$search}%");
-            });
+        if ($filter === 'this_week') {
+            $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
+                ->selectRaw('DAYNAME(created_at) as period, COUNT(*) as count')
+                ->groupBy('period');
+        } elseif ($filter === 'this_month') {
+            $query->whereMonth('created_at', now()->month)
+                ->whereYear('created_at', now()->year)
+                ->selectRaw('DAY(created_at) as period, COUNT(*) as count')
+                ->groupBy('period');
+        } elseif ($filter === 'this_year') {
+            $query->whereYear('created_at', now()->year)
+                ->selectRaw('MONTHNAME(created_at) as period, COUNT(*) as count')
+                ->groupBy('period');
         }
 
-        // Filter by zone
-        if ($request->has('zone')) {
-            $query->where('zone', $request->zone);
+        // Custom from-to range
+        if ($request->has('from') && $request->has('to')) {
+            $query->whereBetween('created_at', [
+                $request->from . ' 00:00:00',
+                $request->to . ' 23:59:59'
+            ])
+            ->selectRaw('DATE(created_at) as period, COUNT(*) as count')
+            ->groupBy('period');
         }
 
-        $perPage = $request->get('per_page', 15);
-        $residents = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        $data = $query->get();
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Residents retrieved successfully',
-            'data' => $residents,
+            'data' => $data
+        ]);
+    }
+
+
+
+    public function total(Request $request){
+
+        $total = Resident::count();
+
+        return response()->json([
+            "status" => "success",
+            "messege" => "Resident total retrieved successfully",
+            "data" => $total
         ]);
     }
 
@@ -48,7 +138,14 @@ class ResidentController extends Controller
      */
     public function store(StoreResidentRequest $request)
     {
+        
         $data = $request->validated();
+
+        $lastResident = Resident::latest('created_at')->first();
+        $lastNumber = $lastResident ? intval(substr($lastResident->resident_id, 4)) : 0;
+        $data['resident_id'] = 'RES-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+
+        
 
         // Handle photo upload
         if ($request->hasFile('photo')) {
@@ -56,7 +153,7 @@ class ResidentController extends Controller
             $photoPath = $photo->store('residents/photos', 'public');
             $data['photo'] = $photoPath;
         }
-
+        // $data["created_by"] = auth()->id();
         $resident = Resident::create($data);
 
         return response()->json([

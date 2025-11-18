@@ -4,13 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-
+use App\Models\User;
 class BarangayClearance extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'trans_number',
         'bcert_number',
         'issued_date',
         'prefix',
@@ -34,7 +33,7 @@ class BarangayClearance extends Model
         'issued_at',
         'issued_on',
         'or_no',
-        'bomarke',
+        'remarks'
     ];
 
     protected $casts = [
@@ -42,5 +41,8 @@ class BarangayClearance extends Model
         'dob' => 'date',
         'issued_on' => 'date',
     ];
+    // public function created_by(){
+    //     return $this->belongTo(User::class);
+    // }
 }
 

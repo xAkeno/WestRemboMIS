@@ -4,14 +4,18 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
 
 class Resident extends Model
 {
     use HasFactory;
 
+    protected $primaryKey = 'resident_id';
+    public $incrementing = false;
+    protected $keyType = 'string';
+
     protected $fillable = [
         'resident_id',
-        'record_create_date',
         'prefix',
         'surname',
         'first_name',
@@ -44,12 +48,15 @@ class Resident extends Model
         'phone_number',
         'email_address',
         'notes',
-        'photo',
+        'photo'
     ];
 
     protected $casts = [
         'record_create_date' => 'datetime',
-        'date_of_birth' => 'date',
+        'date_of_birth' => 'date'
     ];
+    // public function created_by(){
+    //     return $this->belongTo(User::class);
+    // }
 }
 

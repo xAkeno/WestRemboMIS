@@ -22,27 +22,24 @@ class StoreBarangayBuildingClearanceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'trans_number' => 'nullable|string|max:50',
-            'auto_number' => 'nullable|string|max:50',
             'bcert_number' => 'nullable|string|max:50',
-            'issued_date' => 'nullable|date',
+            'issuedDate' => 'nullable|date',
             'prefix' => 'nullable|string|max:10',
             'surname' => 'required|string|max:100',
-            'first_name' => 'required|string|max:100',
-            'middle_name' => 'nullable|string|max:100',
-            'ext_name' => 'nullable|string|max:10',
+            'firstname' => 'required|string|max:100',
+            'middlename' => 'nullable|string|max:100',
+            'extension' => 'nullable|string|max:10',
             'establishment' => 'nullable|string|max:200',
-            'house_block_lot_no' => 'nullable|string|max:50',
+            'houseBlockLot' => 'nullable|string|max:50',
             'street' => 'nullable|string|max:100',
             'zone' => 'nullable|string|max:50',
-            'contact_no' => 'nullable|regex:/^[0-9+\-\s]+$/|max:20',
             'purpose' => 'nullable|string|max:100',
             'purpose_details' => 'nullable|string|max:500',
-            'or_no' => 'nullable|string|max:50',
+            'orNo' => 'nullable|string|max:50',
             'remarks' => 'nullable|string|max:500',
-            'punong_barangay' => 'nullable|string|max:100',
-            'for_the_punong_barangay' => 'nullable|string|max:100',
-            'barangay_position' => 'nullable|string|max:50',
+            'punongBarangay' => 'nullable|string|max:100',
+            'forThePunongBarangay' => 'nullable|string|max:100',
+            'barangayPosition' => 'nullable|string|max:50',
         ];
     }
 }

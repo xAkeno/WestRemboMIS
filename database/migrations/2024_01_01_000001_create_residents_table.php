@@ -9,15 +9,17 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
+
+    protected $primaryKey = 'resident_id';
+    public $incrementing = false; 
+    protected $keyType = 'string';
     public function up(): void
     {
         Schema::create('residents', function (Blueprint $table) {
-            $table->id();
-            $table->string('resident_id')->unique();
-            $table->timestamp('record_create_date')->nullable();
+            $table->string('resident_id')->primary();
             $table->string('prefix')->nullable();
-            $table->string('surname')->nullable();
-            $table->string('first_name')->nullable();
+            $table->string('surname')->required();
+            $table->string('first_name')->required();
             $table->string('middle_name')->nullable();
             $table->string('ext_name')->nullable();
             $table->string('nick_name')->nullable();
@@ -51,6 +53,11 @@ return new class extends Migration
             $table->timestamps();
         });
     }
+
+    protected $casts = [
+        'date_of_birth' => 'date'
+    ];
+
 
     /**
      * Reverse the migrations.

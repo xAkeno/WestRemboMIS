@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -51,26 +52,33 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
+            return response()->json([
+                'status' => 'failed',
+                'message' => 'Invalid credentials'
+            ], 401);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
+        $cookie = cookie(
+            'auth_token', 
+            $token, 
+            60*24*30,  
+            '/',        
+            '127.0.0.1',
+            true,    
+            true,      
+            false, 
+            'None'     
+        );
+
+
 
         return response()->json([
             'status' => 'success',
             'message' => 'Login successful',
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-            ],
-        ]);
+        ])->withCookie($cookie);
     }
 
-    /**
-     * Logout user and revoke token
-     */
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
@@ -78,8 +86,11 @@ class AuthController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Logged out successfully',
-            'data' => null,
         ]);
     }
+
+    /**
+     * Logout user and revoke token
+     */
 }
 
