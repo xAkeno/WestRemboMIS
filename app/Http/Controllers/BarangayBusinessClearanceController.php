@@ -22,10 +22,19 @@ class BarangayBusinessClearanceController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('surname', 'like', "%{$search}%")
-                ->orWhere('first_name', 'like', "%{$search}%")
-                ->orWhere('trans_number', 'like', "%{$search}%")
-                ->orWhere('bcert_number', 'like', "%{$search}%")
-                ->orWhere('business_name', 'like', "%{$search}%");
+                ->orWhere('firstname', 'like', "%{$search}%")
+                ->orWhere('middlename', 'like', "%{$search}%")
+                ->orWhere('brgyBusinessNo', 'like', "%{$search}%")
+                ->orWhere('businessName', 'like', "%{$search}%")
+                ->orWhere('businessType', 'like', "%{$search}%")
+                ->orWhere('capital', 'like', "%{$search}%")
+                ->orWhere('street', 'like', "%{$search}%")
+                ->orWhere('zone', 'like', "%{$search}%")
+                ->orWhere('inspectedBy', 'like', "%{$search}%")
+                ->orWhere('inspectionRemarks', 'like', "%{$search}%")
+                ->orWhere('inspectedRemarks', 'like', "%{$search}%")
+                // Search by combined full name
+                ->orWhereRaw("CONCAT(firstname, ' ', surname) LIKE ?", ["%{$search}%"]);
             });
         }
 
@@ -239,6 +248,32 @@ public function update(UpdateBarangayBusinessClearanceRequest $request, Barangay
             'data' => $total,
         ]);
     }
+
+    public function updateStatusBusiness(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'status' => 'required|in:PENDING,RELEASED'
+            ]);
+
+            $record = BarangayBusinessClearance::findOrFail($id);
+            $record->status = $validated['status'];
+            $record->save();
+
+            return response()->json([
+                "status" => "success",
+                "message" => "Business clearance status updated",
+                "data" => $record
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                "status" => "error",
+                "message" => "Error updating business clearance: " . $e->getMessage(),
+            ], 500);
+        }
+    }
+
 
     /**
      * Remove the specified resource from storage.

@@ -22,7 +22,6 @@ class BarangayClearanceController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('surname', 'like', "%{$search}%")
                 ->orWhere('first_name', 'like', "%{$search}%")
-                ->orWhere('trans_number', 'like', "%{$search}%")
                 ->orWhere('bcert_number', 'like', "%{$search}%");
             });
         }
@@ -204,6 +203,32 @@ class BarangayClearanceController extends Controller
             'data' => $barangayClearance->fresh(),
         ]);
     }
+
+    public function updateStatusClearance(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'status' => 'required|in:PENDING,RELEASED'
+            ]);
+
+            $record = BarangayClearance::findOrFail($id);
+            $record->status = $validated['status'];
+            $record->save();
+
+            return response()->json([
+                "status" => "success",
+                "message" => "Barangay clearance status updated",
+                "data" => $record
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                "status" => "error",
+                "message" => "Error updating barangay clearance: " . $e->getMessage(),
+            ], 500);
+        }
+    }
+
 
     /**
      * Remove the specified resource from storage.

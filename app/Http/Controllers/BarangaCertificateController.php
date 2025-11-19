@@ -14,8 +14,18 @@ class BarangaCertificateController extends Controller
             $query = BarangayCertificate::query();
 
             $columns = [
-                'trans_number', 'bcert_number', 'firstname', 'middle_name', 'surname', 
-                'extension', 'house_block_lot_no', 'street', 'zone', 'purpose', 'purpose_details'
+                'bcert_number', 
+                'prefix', 
+                'firstname', 
+                'middle_name', 
+                'surname', 
+                'extension', 
+                'house_block_lot_no', 
+                'street', 
+                'zone', 
+                'purpose', 
+                'purpose_details',
+                'status'
             ];
 
             // Search functionality
@@ -25,6 +35,8 @@ class BarangaCertificateController extends Controller
                     foreach ($columns as $col) {
                         $q->orWhere($col, 'like', "%{$search}%");
                     }
+
+                    $q->orWhereRaw("CONCAT_WS(' ',firstname, middle_name, surname) LIKE ?", ["%{$search}%"]);
                 });
             }
 
@@ -138,8 +150,6 @@ class BarangaCertificateController extends Controller
             $newRecord = 'BCERT-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
             $data["bcert_number"] = $newRecord;
-            
-            $data['status'] = "PENDING";
 
             $barangaCertificate = BarangayCertificate::create($data);
 
@@ -197,6 +207,32 @@ class BarangaCertificateController extends Controller
             ], 500);
         }
     }
+
+    public function updateStatus(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'status' => 'required|in:PENDING,RELEASED'
+            ]);
+
+            $record = BarangayCertificate::findOrFail($id);
+            $record->status = $validated['status'];
+            $record->save();
+
+            return response()->json([
+                "status" => "success",
+                "message" => "Status updated successfully",
+                "data" => $record
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                "status" => "error",
+                "message" => "Error updating status: " . $e->getMessage(),
+            ], 500);
+        }
+    }
+
 
     public function destroy(BarangayCertificate $request){
         try{

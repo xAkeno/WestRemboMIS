@@ -33,9 +33,8 @@ return new class extends Migration
             $table->string('punongBarangay')->nullable();
             $table->string('forThePunongBarangay')->nullable();
             $table->string('barangayPosition')->nullable();
-            $table->string('status',50)->nullable();
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
-
+            $table->string('status', 50)->nullable()->default('PENDING');
             $table->timestamps();
         });
     }

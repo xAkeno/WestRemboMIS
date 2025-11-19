@@ -37,6 +37,13 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/chart/building-clearances', [BarangayBuildingClearanceController::class, 'chartData']);
     Route::get('/chart/barangay-certificates', [BarangaCertificateController::class, 'chartData']);
     Route::get('/chart/residents', [ResidentController::class, 'chartData']);
+
+    Route::put('/barangay-certificates/status/{id}', [BarangaCertificateController::class, 'updateStatus']);
+    Route::put('/building-clearances/status/{id}', [BarangayBuildingClearanceController::class, 'updateStatusBuilding']);
+    Route::put('/business-clearances/status/{id}', [BarangayBusinessClearanceController::class, 'updateStatusBusiness']);
+    Route::put('/residents/status/{id}', [ResidentController::class, 'updateStatusResident']);
+    Route::put('/barangay-clearances/status/{id}', [BarangayClearanceController::class, 'updateStatusClearance']);
+
     
     Route::post('/logout', [AuthController::class, 'logout']);
 });

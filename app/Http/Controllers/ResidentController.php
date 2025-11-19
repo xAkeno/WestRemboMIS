@@ -126,6 +126,32 @@ public function chartData(Request $request)
     ]);
 }
 
+    public function updateStatusResident(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'status' => 'required|in:PENDING,RELEASED'
+            ]);
+
+            $record = Resident::findOrFail($id);
+            $record->status = $validated['status'];
+            $record->save();
+
+            return response()->json([
+                "status" => "success",
+                "message" => "Resident status updated",
+                "data" => $record
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                "status" => "error",
+                "message" => "Error updating resident: " . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
 
 
 

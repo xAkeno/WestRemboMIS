@@ -23,10 +23,17 @@ class BarangayBuildingClearanceController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('surname', 'like', "%{$search}%")
-                ->orWhere('first_name', 'like', "%{$search}%")
-                ->orWhere('trans_number', 'like', "%{$search}%")
+                ->orWhere('firstname', 'like', "%{$search}%")
+                ->orWhere('middlename', 'like', "%{$search}%")
                 ->orWhere('bcert_number', 'like', "%{$search}%")
-                ->orWhere('establishment', 'like', "%{$search}%");
+                ->orWhere('houseBlockLot', 'like', "%{$search}%")
+                ->orWhere('street', 'like', "%{$search}%")
+                ->orWhere('zone', 'like', "%{$search}%")
+                ->orWhere('purpose', 'like', "%{$search}%")
+                ->orWhere('orNo', 'like', "%{$search}%")
+                ->orWhere('remarks', 'like', "%{$search}%")
+                // Search by combined full name
+                ->orWhereRaw("CONCAT(firstname, ' ', surname) LIKE ?", ["%{$search}%"]);
             });
         }
 
@@ -207,6 +214,31 @@ class BarangayBuildingClearanceController extends Controller
             'message' => 'Building clearance updated successfully',
             'data' => $building_clearance->fresh(),
         ]);
+    }
+
+    public function updateStatusBuilding(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'status' => 'required|in:PENDING,RELEASED'
+            ]);
+
+            $record = BarangayBuildingClearance::findOrFail($id);
+            $record->status = $validated['status'];
+            $record->save();
+
+            return response()->json([
+                "status" => "success",
+                "message" => "Building clearance status updated",
+                "data" => $record
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                "status" => "error",
+                "message" => "Error updating building clearance: " . $e->getMessage(),
+            ], 500);
+        }
     }
 
 
