@@ -6,6 +6,8 @@ use App\Http\Requests\StoreBarangayBuildingClearanceRequest;
 use App\Http\Requests\UpdateBarangayBuildingClearanceRequest;
 use App\Models\BarangayBuildingClearance;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+
 
 class BarangayBuildingClearanceController extends Controller
 {
@@ -193,17 +195,20 @@ class BarangayBuildingClearanceController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateBarangayBuildingClearanceRequest $request, BarangayBuildingClearance $barangayBuildingClearance)
+    public function update(UpdateBarangayBuildingClearanceRequest $request, BarangayBuildingClearance $building_clearance)
     {
-        $data = $request->validated();
-        $barangayBuildingClearance->update($data);
+        \Log::info('Request data:', $request->validated());
+        \Log::info('Model before update:', $building_clearance->toArray());
+        
+        $building_clearance->update($request->validated());
 
         return response()->json([
             'status' => 'success',
             'message' => 'Building clearance updated successfully',
-            'data' => $barangayBuildingClearance->fresh(),
+            'data' => $building_clearance->fresh(),
         ]);
     }
+
 
     /**
      * Remove the specified resource from storage.

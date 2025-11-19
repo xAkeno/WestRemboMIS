@@ -192,29 +192,44 @@ class BarangayBusinessClearanceController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateBarangayBusinessClearanceRequest $request, BarangayBusinessClearance $barangayBusinessClearance)
-    {
-        $data = $request->validated();
+public function update(UpdateBarangayBusinessClearanceRequest $request, BarangayBusinessClearance $barangayBusinessClearance)
+{
+    $data = $request->validated();
 
-        // Handle attachment upload
-        if ($request->hasFile('attachment')) {
-            // Delete old attachment if exists
-            if ($barangayBusinessClearance->attachment) {
-                Storage::disk('public')->delete($barangayBusinessClearance->attachment);
-            }
-            $attachment = $request->file('attachment');
-            $attachmentPath = $attachment->store('clearances/business/attachments', 'public');
-            $data['attachment'] = $attachmentPath;
+    // Map frontend keys to database/model fields
+    $data['businessName'] = $data['establishment'] ?? $data['businessName'] ?? null;
+    $data['houseBlockLotNo'] = $data['houseBlockLot'] ?? $data['houseBlockLotNo'] ?? null;
+    $data['ext'] = $data['extension'] ?? $data['ext'] ?? null;
+
+    // Format dates to 'Y-m-d' for MySQL DATE
+    foreach (['issuedDate', 'dateOfInspection', 'dateInspected'] as $dateField) {
+        if (isset($data[$dateField]) && $data[$dateField]) {
+            $data[$dateField] = date('Y-m-d', strtotime($data[$dateField]));
         }
-
-        $barangayBusinessClearance->update($data);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Business clearance updated successfully',
-            'data' => $barangayBusinessClearance->fresh(),
-        ]);
     }
+
+    // Handle attachment upload
+    if ($request->hasFile('attachment')) {
+        if ($barangayBusinessClearance->attachment) {
+            Storage::disk('public')->delete($barangayBusinessClearance->attachment);
+        }
+        $attachment = $request->file('attachment');
+        $data['attachment'] = $attachment->store('clearances/business/attachments', 'public');
+    }
+
+    // Update only fillable fields
+    $fillable = $barangayBusinessClearance->getFillable();
+    $updateData = array_intersect_key($data, array_flip($fillable));
+
+    $barangayBusinessClearance->update($updateData);
+
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Business clearance updated successfully',
+        'data' => $barangayBusinessClearance->fresh(),
+    ]);
+}
+
     public function total(Request $request){
         $total = BarangayBusinessClearance::count();
 

@@ -8,10 +8,10 @@ use App\Models\User;
 class BarangayBuildingClearance extends Model
 {
     use HasFactory;
-
+    
     protected $fillable = [
         'bcert_number',
-        'issued_date',
+        'issuedDate',
         'prefix',
         'surname',
         'firstname',
@@ -29,6 +29,8 @@ class BarangayBuildingClearance extends Model
         'forThePunongBarangay',
         'barangayPosition'
     ];
+
+
 
     protected $casts = [
         'issued_date' => 'date',

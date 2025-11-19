@@ -177,19 +177,20 @@ class BarangaCertificateController extends Controller
         ],200);
     }
 
-    public function update(UpdateBarangayCertificateRequest $request,BarangaCertificateRequest $barangaCertificateRequest){
-        try{
+    public function update(UpdateBarangayCertificateRequest $request, BarangayCertificate $barangayCertificate)
+    {
+        try {
             $data = $request->validated();
-            
-            $barangaCertificateRequest->update($data);
+
+            $barangayCertificate->update($data);
 
             return response()->json([
                 "status" => "success",
-                "messege" => "Sucessfullt updated the certificate",
-                "data" => $barangaCertificateRequest->fresh()
+                "message" => "Successfully updated the certificate",
+                "data" => $barangayCertificate->fresh()
             ]);
 
-        }catch(\Exception $e){
+        } catch (\Exception $e) {
             return response()->json([
                 "status" => "error",
                 "message" => "An error occurred while updating Barangay Certificate: " . $e->getMessage(),
