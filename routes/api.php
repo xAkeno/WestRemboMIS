@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Middleware\EnsureTokenIsValid;
 
 // Public routes
-Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
 // // Handle preflight requests
@@ -20,6 +19,12 @@ Route::post('/login', [AuthController::class, 'login']);
 
 // All routes - no authentication required
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::get('/getAllUser', [AuthController::class, 'index']);
+    Route::get('/users/{id}', [AuthController::class, 'show']);
+    Route::put('/users/{id}/permissions', [AuthController::class, 'updatePermissions']);
+    Route::get('/me', [AuthController::class, 'me']);
+
     Route::apiResource('residents', ResidentController::class);
     Route::apiResource('business-clearances', BarangayBusinessClearanceController::class);
     Route::apiResource('building-clearances', BarangayBuildingClearanceController::class);
