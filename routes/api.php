@@ -8,6 +8,7 @@ use App\Http\Controllers\BarangayClearanceController;
 use App\Http\Controllers\ResidentController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Middleware\EnsureTokenIsValid;
+use App\Http\Controllers\ReportsController;
 
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
@@ -48,6 +49,14 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::put('/business-clearances/status/{id}', [BarangayBusinessClearanceController::class, 'updateStatusBusiness']);
     Route::put('/residents/status/{id}', [ResidentController::class, 'updateStatusResident']);
     Route::put('/barangay-clearances/status/{id}', [BarangayClearanceController::class, 'updateStatusClearance']);
+
+    Route::prefix('reports')->group(function () {
+        Route::get('/overview', [ReportsController::class, 'getOverview']);
+        Route::get('/monthly-trends', [ReportsController::class, 'getMonthlyTrends']);
+        Route::get('/distribution', [ReportsController::class, 'getDistribution']);
+        Route::get('/status-overview', [ReportsController::class, 'getStatusOverview']);
+        Route::get('/monthly-comparison', [ReportsController::class, 'getMonthlyComparison']);
+    });
 
     
     Route::post('/logout', [AuthController::class, 'logout']);
