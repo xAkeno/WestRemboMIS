@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreBarangayBusinessClearanceRequest;
 use App\Http\Requests\UpdateBarangayBusinessClearanceRequest;
 use App\Models\BarangayBusinessClearance;
+use App\Services\TicketService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -159,10 +160,22 @@ class BarangayBusinessClearanceController extends Controller
 
         $clearance = BarangayBusinessClearance::create($data);
 
+        // Create ticket linked to this clearance (kiosk flow: no requester)
+        $ticket = null;
+        // try {
+        //     $ticket = app(TicketService::class)->createTicketForService($clearance, 'Business Clearance', $data['priority'] ?? 'Normal', null);
+        //     \Log::info('Ticket created for Business Clearance', ['ticket_id' => $ticket?->id, 'ticket_number' => $ticket?->ticket_number]);
+        // } catch (\Throwable $e) {
+        //     \Log::error('Failed to create ticket for Business Clearance: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        // }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Business clearance created successfully',
-            'data' => $clearance,
+            'data' => [
+                'service' => $clearance,
+                'ticket' => $ticket,
+            ],
         ], 201);
     }
     public function latestRecord(){

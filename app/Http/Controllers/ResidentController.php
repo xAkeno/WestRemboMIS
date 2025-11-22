@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreResidentRequest;
 use App\Http\Requests\UpdateResidentRequest;
 use App\Models\Resident;
+use App\Services\TicketService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -190,10 +191,18 @@ public function chartData(Request $request)
         // $data["created_by"] = auth()->id();
         $resident = Resident::create($data);
 
+        $ticket = null;
+        // try {
+        //     $ticket = app(TicketService::class)->createTicketForService($resident, 'Resident Registration', $data['priority'] ?? 'Normal', null);
+        //     \Log::info('Ticket created for Resident Registration', ['ticket_id' => $ticket?->id]);
+        // } catch (\Throwable $e) {
+        //     \Log::error('Failed to create ticket for Resident Registration: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        // }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Resident created successfully',
-            'data' => $resident,
+            'data' => ['service' => $resident, 'ticket' => $ticket],
         ], 201);
     }
 

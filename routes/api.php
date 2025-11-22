@@ -12,6 +12,8 @@ use App\Http\Controllers\ReportsController;
 
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
+// Kiosk endpoint
+Route::post('/kiosk/submit', [\App\Http\Controllers\KioskController::class, 'submit']);
 
 // // Handle preflight requests
 // Route::options('/*', function () {
@@ -31,6 +33,16 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::apiResource('building-clearances', BarangayBuildingClearanceController::class);
     Route::apiResource('barangay-clearances', BarangayClearanceController::class);
     Route::apiResource('barangay-certificates', BarangaCertificateController::class);
+
+    // Ticket system endpoints
+    Route::post('/tickets', [\App\Http\Controllers\TicketController::class, 'store']);
+    Route::get('/tickets/pending', [\App\Http\Controllers\TicketController::class, 'pending']);
+    Route::get('/tickets/now-serving', [\App\Http\Controllers\TicketController::class, 'nowServing']);
+    Route::get('/tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'show']);
+    Route::patch('/tickets/{ticket}/status', [\App\Http\Controllers\TicketController::class, 'updateStatus']);
+    Route::post('/tickets/{ticket}/remarks', [\App\Http\Controllers\TicketController::class, 'addRemark']);
+
+    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
 
     // Route::get('/latestRecordBrgyResident', [ResidentController::class, 'latestRecord']);
     Route::get('/latestRecordBrgyClearance', [BarangayClearanceController::class, 'latestRecord']);

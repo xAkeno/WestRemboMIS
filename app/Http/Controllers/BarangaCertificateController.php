@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\BarangayCertificate;
+use App\Services\TicketService;
 use App\Http\Requests\StoreBarangayCertificateRequest;
 use App\Http\Requests\UpdateBarangayCertificateRequest;
 use Illuminate\Support\Facades\Log;
@@ -153,10 +154,18 @@ class BarangaCertificateController extends Controller
 
             $barangaCertificate = BarangayCertificate::create($data);
 
+            $ticket = null;
+            // try {
+            //     $ticket = app(TicketService::class)->createTicketForService($barangaCertificate, 'Barangay Certificate', $data['priority'] ?? 'Normal', null);
+            //     Log::info('Ticket created for Barangay Certificate', ['ticket_id' => $ticket?->id]);
+            // } catch (\Throwable $e) {
+            //     Log::error('Ticket creation failed for BarangayCertificate: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            // }
+
             return response()->json([
                 "status" => "success",
                 "message" => "Barangay Certificate created successfully",
-                "data" => $barangaCertificate,
+                "data" => ['service' => $barangaCertificate, 'ticket' => $ticket],
             ]);
         }catch(\Exception $e){
             return response()->json([

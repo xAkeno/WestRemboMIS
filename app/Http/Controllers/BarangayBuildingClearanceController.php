@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreBarangayBuildingClearanceRequest;
 use App\Http\Requests\UpdateBarangayBuildingClearanceRequest;
 use App\Models\BarangayBuildingClearance;
+use App\Services\TicketService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -161,10 +162,18 @@ class BarangayBuildingClearanceController extends Controller
 
         $clearance = BarangayBuildingClearance::create($data);
 
+        $ticket = null;
+        // try {
+        //     $ticket = app(TicketService::class)->createTicketForService($clearance, 'Building Clearance', $data['priority'] ?? 'Normal', null);
+        //     \Log::info('Ticket created for Building Clearance', ['ticket_id' => $ticket?->id]);
+        // } catch (\Throwable $e) {
+        //     \Log::error('Failed to create ticket for Building Clearance: ' . $e->getMessage());
+        // }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Building clearance created successfully',
-            'data' => $clearance,
+            'data' => ['service' => $clearance, 'ticket' => $ticket],
         ], 201);
     }
     public function latestRecord(){

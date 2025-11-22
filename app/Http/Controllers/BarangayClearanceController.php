@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreBarangayClearanceRequest;
 use App\Http\Requests\UpdateBarangayClearanceRequest;
 use App\Models\BarangayClearance;
+use App\Services\TicketService;
 use Illuminate\Http\Request;
 
 class BarangayClearanceController extends Controller
@@ -150,10 +151,18 @@ class BarangayClearanceController extends Controller
         // $data["created_by"] = auth()->id();
         $clearance = BarangayClearance::create($data);
 
+        $ticket = null;
+        // try {
+        //     $ticket = app(TicketService::class)->createTicketForService($clearance, 'Barangay Clearance', $data['priority'] ?? 'Normal', null);
+        //     \Log::info('Ticket created for Barangay Clearance', ['ticket_id' => $ticket?->id]);
+        // } catch (\Throwable $e) {
+        //     \Log::error('Failed to create ticket for Barangay Clearance: ' . $e->getMessage());
+        // }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Barangay clearance created successfully',
-            'data' => $clearance,
+            'data' => ['service' => $clearance, 'ticket' => $ticket],
         ], 201);
     }
     public function latestRecord(){
