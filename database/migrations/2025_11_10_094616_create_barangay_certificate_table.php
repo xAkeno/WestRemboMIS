@@ -37,7 +37,7 @@ return new class extends Migration
             $table->text('purpose_details')->nullable();
             $table->string('punong_barangay', 100)->nullable();
             $table->string('for_the_punong_barangay', 100)->nullable();
-            $table->string('status', 50)->nullable()->default('PENDING');
+            $table->string('status', 50)->nullable()->default('ENCODED');
 
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
 

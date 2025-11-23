@@ -30,6 +30,9 @@
             'purpose_details',
             'punong_barangay',
             'for_the_punong_barangay',
+            'status',
+            'created_by',
+            'updated_by',
         ];
         protected $casts = [
             'issued_date' => 'date',
@@ -37,8 +40,15 @@
             'created_at' => 'date',
             'age' => 'integer',
         ];
-        // public function created_by(){
-        //     return $this->belongTo(User::class);
-        // }
+
+        public function creator()
+        {
+            return $this->belongsTo(User::class, 'created_by');
+        }
+
+        public function updater()
+        {
+            return $this->belongsTo(User::class, 'updated_by');
+        }
     }
 ?>

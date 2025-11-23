@@ -75,6 +75,29 @@ class TicketController extends Controller
 
         return TicketResource::collection($tickets);
     }
+    public function findByTicketNumberAndUpdateStatus(Request $request, $ticketNumber)
+    {
+        $request->validate([
+            'status' => 'required|string',
+        ]);
+
+        // Find the ticket using ticket_number
+        $ticket = Ticket::where('ticket_number', $ticketNumber)->first();
+
+        if (! $ticket) {
+            return response()->json([
+                'message' => 'Ticket not found.'.$ticketNumber
+            ], 404);
+        }
+
+        // Update the ticket status
+        $ticket->status = $request->status;
+        $ticket->save();
+
+        return new TicketResource($ticket->fresh());
+    }
+
+
 
     public function show(Ticket $ticket)
     {

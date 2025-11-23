@@ -48,7 +48,7 @@ return new class extends Migration
             $table->string('email_address')->nullable();
             $table->text('notes')->nullable();
             $table->string('photo')->nullable();
-            $table->string('status', 50)->nullable()->default('PENDING');
+            $table->string('status', 50)->nullable()->default('ENCODED');
             $table->timestamps();
         });
     }

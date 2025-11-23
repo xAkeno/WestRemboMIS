@@ -6,9 +6,12 @@ use App\Models\BarangayCertificate;
 use App\Services\TicketService;
 use App\Http\Requests\StoreBarangayCertificateRequest;
 use App\Http\Requests\UpdateBarangayCertificateRequest;
+use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Support\Facades\Log;
+use App\Models\Ticket;
 class BarangaCertificateController extends Controller
 {
+    use ExtractsUserFromAuthToken;
     public function index(Request $request)
     {
         try {
@@ -72,9 +75,9 @@ class BarangaCertificateController extends Controller
             }
 
             // Filter by status (commented out for now)
-            // if ($request->has('status')) {
-            //     $query->where('status', $request->status);
-            // }
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
 
             $per_page = $request->get("per_page", 15);
             $data = $query->orderBy("created_at", "desc")->paginate($per_page);
@@ -151,8 +154,28 @@ class BarangaCertificateController extends Controller
             $newRecord = 'BCERT-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
             $data["bcert_number"] = $newRecord;
+            $data["created_by"] = $this->getUserIdFromAuthToken();
+            $data["updated_by"] = $this->getUserIdFromAuthToken();
+            $data["status"] = "ENCODED";
 
             $barangaCertificate = BarangayCertificate::create($data);
+
+            // Find pending ticket for this service type and attach the created service
+            $ticketQuery = \App\Models\Ticket::where('service_type', 'Barangay Certificate')->whereNull('serviceable_id');
+            $found = null;
+            $userId = $this->getUserIdFromAuthToken();
+            if ($userId) {
+                $found = (clone $ticketQuery)->where('requester_id', $userId)->orderBy('created_at', 'desc')->first();
+            }
+            if (!$found) {
+                $found = $ticketQuery->orderBy('created_at', 'desc')->first();
+            }
+            if ($found) {
+                $found->serviceable_type = \App\Models\BarangayCertificate::class;
+                $found->serviceable_id = $barangaCertificate->id;
+                $found->status = 'ENCODED';
+                $found->save();
+            }
 
             $ticket = null;
             // try {
@@ -221,7 +244,7 @@ class BarangaCertificateController extends Controller
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|in:PENDING,RELEASED'
+                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
             ]);
 
             $record = BarangayCertificate::findOrFail($id);

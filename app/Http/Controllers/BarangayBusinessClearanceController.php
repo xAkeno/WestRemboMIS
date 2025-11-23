@@ -6,11 +6,14 @@ use App\Http\Requests\StoreBarangayBusinessClearanceRequest;
 use App\Http\Requests\UpdateBarangayBusinessClearanceRequest;
 use App\Models\BarangayBusinessClearance;
 use App\Services\TicketService;
+use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Ticket;
 
 class BarangayBusinessClearanceController extends Controller
 {
+    use ExtractsUserFromAuthToken;
     /**
      * Display a listing of the resource.
      */
@@ -70,9 +73,9 @@ class BarangayBusinessClearanceController extends Controller
         }
 
         // Filter by status (commented out for now)
-        // if ($request->has('status')) {
-        //     $query->where('status', $request->status);
-        // }
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
 
         $perPage = $request->get('per_page', 15);
         $clearances = $query->orderBy('created_at', 'desc')->paginate($perPage);
@@ -155,10 +158,29 @@ class BarangayBusinessClearanceController extends Controller
         $data = $request->validated();
 
         $data['brgyBusinessNo'] = $newRecord;
-        $data['status'] = "PENDING";
+        $data["status"] = "ENCODED";
+        $data['created_by'] = $this->getUserIdFromAuthToken();
+        $data['updated_by'] = $this->getUserIdFromAuthToken();
 
 
         $clearance = BarangayBusinessClearance::create($data);
+
+        // Find pending ticket for this service type and attach the created service
+        $ticketQuery = \App\Models\Ticket::where('service_type', 'Business Clearance')->whereNull('serviceable_id');
+        $found = null;
+        $userId = $this->getUserIdFromAuthToken();
+        if ($userId) {
+            $found = (clone $ticketQuery)->where('requester_id', $userId)->orderBy('created_at', 'desc')->first();
+        }
+        if (!$found) {
+            $found = $ticketQuery->orderBy('created_at', 'desc')->first();
+        }
+        if ($found) {
+            $found->serviceable_type = \App\Models\BarangayBusinessClearance::class;
+            $found->serviceable_id = $clearance->id;
+            $found->status = 'ENCODED';
+            $found->save();
+        }
 
         // Create ticket linked to this clearance (kiosk flow: no requester)
         $ticket = null;
@@ -266,7 +288,7 @@ public function update(UpdateBarangayBusinessClearanceRequest $request, Barangay
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|in:PENDING,RELEASED'
+                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
             ]);
 
             $record = BarangayBusinessClearance::findOrFail($id);

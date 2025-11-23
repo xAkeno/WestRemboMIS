@@ -38,7 +38,7 @@ return new class extends Migration
             $table->date('issued_on')->nullable();
             $table->string('or_no')->nullable();
             $table->string('remarks')->nullable();
-            $table->string('status', 50)->nullable()->default('PENDING');
+            $table->string('status', 50)->nullable()->default('ENCODED');
 
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
 

@@ -6,10 +6,13 @@ use App\Http\Requests\StoreBarangayClearanceRequest;
 use App\Http\Requests\UpdateBarangayClearanceRequest;
 use App\Models\BarangayClearance;
 use App\Services\TicketService;
+use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Http\Request;
+use App\Models\Ticket;
 
 class BarangayClearanceController extends Controller
 {
+    use ExtractsUserFromAuthToken;
     /**
      * Display a listing of the resource.
      */
@@ -33,11 +36,11 @@ class BarangayClearanceController extends Controller
         }
 
         // Filter by status (Pending, Released, etc.) - currently commented
-        /*
-        if ($request->has('status') && $request->status !== null && $request->status !== 'All') {
+        
+        if ($request->has('status')) {
             $query->where('status', $request->status);
         }
-        */
+        
 
         // Filter by predefined periods: week, month, year
         if ($request->has('filter_date') && $request->filter_date !== null) {
@@ -145,11 +148,22 @@ class BarangayClearanceController extends Controller
         $data = $request->validated();
 
         $data['bcert_number'] = $newRecord;
-        $data['status'] = "PENDING";
+        $data["status"] = "ENCODED";
+        $data['created_by'] = $this->getUserIdFromAuthToken();
+        $data['updated_by'] = $this->getUserIdFromAuthToken();
 
 
         // $data["created_by"] = auth()->id();
+
+        // Update related ticket status to ENCODED if found
+
         $clearance = BarangayClearance::create($data);
+
+        // Update the related ticket status to ENCODED using correct columns
+        Ticket::query()
+            ->where('serviceable_type', BarangayClearance::class)
+            ->where('serviceable_id', $clearance->id)
+            ->update(['status' => "ENCODED"]);
 
         $ticket = null;
         // try {
@@ -217,7 +231,7 @@ class BarangayClearanceController extends Controller
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|in:PENDING,RELEASED'
+                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
             ]);
 
             $record = BarangayClearance::findOrFail($id);

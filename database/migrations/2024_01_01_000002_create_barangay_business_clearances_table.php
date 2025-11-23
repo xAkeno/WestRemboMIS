@@ -35,7 +35,7 @@ return new class extends Migration
             $table->date('dateInspected')->nullable();
             $table->text('inspectedNote')->nullable();
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
-            $table->string('status', 50)->nullable()->default('PENDING');
+            $table->string('status', 50)->nullable()->default('ENCODED');
             $table->timestamps();
         });
     }

@@ -6,11 +6,15 @@ use App\Http\Requests\StoreResidentRequest;
 use App\Http\Requests\UpdateResidentRequest;
 use App\Models\Resident;
 use App\Services\TicketService;
+use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Ticket;
 
 class ResidentController extends Controller
 {
+    use ExtractsUserFromAuthToken;
+
     /**
      * Display a listing of the resource.
      */
@@ -61,9 +65,9 @@ class ResidentController extends Controller
             }
 
             // Filter by status (commented out for now)
-            // if ($request->has('status')) {
-            //     $query->where('status', $request->status);
-            // }
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
 
             $perPage = $request->get('per_page', 15);
             $residents = $query->orderBy('created_at', 'desc')->paginate($perPage);
@@ -131,7 +135,7 @@ public function chartData(Request $request)
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|in:PENDING,RELEASED'
+                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
             ]);
 
             $record = Resident::findOrFail($id);
@@ -172,15 +176,12 @@ public function chartData(Request $request)
      */
     public function store(StoreResidentRequest $request)
     {
-        
         $data = $request->validated();
-
         $lastResident = Resident::latest('created_at')->first();
         $lastNumber = $lastResident ? intval(substr($lastResident->resident_id, 4)) : 0;
         $data['resident_id'] = 'RES-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
-        $data['status'] = "PENDING";
 
-        
+        $userId = $this->getUserIdFromAuthToken();
 
         // Handle photo upload
         if ($request->hasFile('photo')) {
@@ -188,10 +189,32 @@ public function chartData(Request $request)
             $photoPath = $photo->store('residents/photos', 'public');
             $data['photo'] = $photoPath;
         }
-        // $data["created_by"] = auth()->id();
+
+        $data['created_by'] = $userId;
+        $data['updated_by'] = $userId;
+
         $resident = Resident::create($data);
 
-        $ticket = null;
+        // Find a matching pending ticket created earlier (kiosk or requester)
+        $ticket = \App\Models\Ticket::where('service_type', 'Resident Registration')
+            ->whereNull('serviceable_id');
+
+        $found = null;
+        if ($userId) {
+            $found = (clone $ticket)->where('requester_id', $userId)->orderBy('created_at', 'desc')->first();
+        }
+        if (!$found) {
+            $found = $ticket->orderBy('created_at', 'desc')->first();
+        }
+
+        if ($found) {
+            $found->serviceable_type = \App\Models\Resident::class;
+            $found->serviceable_id = $resident->id;
+            $found->status = 'ENCODED';
+            $found->save();
+        }
+
+        $ticket = $found;
         // try {
         //     $ticket = app(TicketService::class)->createTicketForService($resident, 'Resident Registration', $data['priority'] ?? 'Normal', null);
         //     \Log::info('Ticket created for Resident Registration', ['ticket_id' => $ticket?->id]);

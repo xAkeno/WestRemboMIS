@@ -9,7 +9,7 @@ use App\Http\Controllers\ResidentController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Middleware\EnsureTokenIsValid;
 use App\Http\Controllers\ReportsController;
-
+use App\Http\Controllers\LatestDashboard;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 // Kiosk endpoint
@@ -41,6 +41,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'show']);
     Route::patch('/tickets/{ticket}/status', [\App\Http\Controllers\TicketController::class, 'updateStatus']);
     Route::post('/tickets/{ticket}/remarks', [\App\Http\Controllers\TicketController::class, 'addRemark']);
+    Route::post('/tickets/update-by-service/{ticketNumber}', [\App\Http\Controllers\TicketController::class, 'findByTicketNumberAndUpdateStatus']);
 
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
 
@@ -69,6 +70,8 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
         Route::get('/status-overview', [ReportsController::class, 'getStatusOverview']);
         Route::get('/monthly-comparison', [ReportsController::class, 'getMonthlyComparison']);
     });
+
+    Route::get('/latest-activities', [LatestDashboard::class, 'latestActivity']);
 
     
     Route::post('/logout', [AuthController::class, 'logout']);
