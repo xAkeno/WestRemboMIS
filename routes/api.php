@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Middleware\EnsureTokenIsValid;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\LatestDashboard;
+use App\Http\Controllers\KioskController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 // Kiosk endpoint
@@ -72,7 +73,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     });
 
     Route::get('/latest-activities', [LatestDashboard::class, 'latestActivity']);
-
+    Route::post('/kiosk/search', [KioskController::class, 'search']);
     
     Route::post('/logout', [AuthController::class, 'logout']);
 });

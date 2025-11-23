@@ -1,7 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Http\Request;
 use App\Http\Requests\KioskSubmitRequest;
 use App\Models\Kiosk;
 use App\Services\TicketService;
@@ -69,6 +69,47 @@ class KioskController extends Controller
                 'kiosk' => null,
                 'ticket' => null,
                 'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'date_of_birth' => 'required|date',
+        ]);
+
+        $firstName = $request->input('first_name');
+        $lastName = $request->input('last_name');
+        $dob = $this->normalizeDate($request->input('date_of_birth'));
+
+        try {
+            $kiosk = Kiosk::where('first_name', 'like', $firstName)
+                ->where('last_name', 'like', $lastName)
+                ->where('date_of_birth', $dob)
+                ->first();
+
+            // if (!$kiosk) {
+            //     return response()->json([
+            //         'message' => 'No record found for the given details.',
+            //         'kiosk' => null,
+            //         'ticket' => null
+            //     ], 404);
+            // }
+
+            // $ticket = $this->ticketService->getTicketByKiosk($kiosk);
+
+            return response()->json([
+                'kiosk' => $kiosk,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Kiosk search failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+
+            return response()->json([
+                'message' => 'Failed to search for record.',
+                'error' => $e->getMessage()
             ], 500);
         }
     }
