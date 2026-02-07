@@ -28,6 +28,9 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/users/{id}', [AuthController::class, 'show']);
     Route::put('/users/{id}/permissions', [AuthController::class, 'updatePermissions']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::get('/details', [AuthController::class, 'details']);
+    Route::post('/uploadProfileImage', [AuthController::class, 'uploadProfileImage']);
+    Route::put('/updateProfile', [AuthController::class, 'updateProfile']);
 
     Route::apiResource('residents', ResidentController::class);
     Route::apiResource('business-clearances', BarangayBusinessClearanceController::class);

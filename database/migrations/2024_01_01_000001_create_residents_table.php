@@ -14,7 +14,9 @@ return new class extends Migration
     {
         Schema::create('residents', function (Blueprint $table) {
             $table->id();
-            $table->string('resident_id')->uniqid();
+            $table->string('resident_id')->unique();
+            $table->unsignedBigInteger('requester_id')->nullable();
+            $table->string('requester_type')->nullable();
             $table->string('prefix')->nullable();
             $table->string('surname')->required();
             $table->string('first_name')->required();
