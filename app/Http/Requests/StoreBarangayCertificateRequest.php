@@ -10,8 +10,8 @@
         public function rules(): array
         {
             return [
-                'bcert_number' => 'required|string|max:50',
                 'issued_date' => 'required|date',
+                'requester_type' => 'required|string|max:50',
                 'prefix' => 'nullable|string|max:10',
                 'firstname' => 'required|string|max:100',
                 'middle_name' => 'nullable|string|max:100',

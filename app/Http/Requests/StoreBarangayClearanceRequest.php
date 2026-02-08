@@ -24,6 +24,7 @@ class StoreBarangayClearanceRequest extends FormRequest
         return [
             'trans_number' => 'nullable|string|max:50',
             'bcert_number' => 'nullable|string|max:50',
+            'requester_type' => 'required|string|max:50',
             'issued_date' => 'nullable|date',
             'prefix' => 'nullable|string|max:10',
             'surname' => 'required|string|max:100',

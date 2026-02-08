@@ -176,12 +176,19 @@ public function chartData(Request $request)
      */
     public function store(StoreResidentRequest $request)
     {
+
+        \Log::info('RAW REQUEST DATA', [
+            'all' => $request->all(),
+            'files' => $request->allFiles(),
+        ]);
         $data = $request->validated();
         $lastResident = Resident::latest('created_at')->first();
         $lastNumber = $lastResident ? intval(substr($lastResident->resident_id, 4)) : 0;
         $data['resident_id'] = 'RES-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
         $userId = $this->getUserIdFromAuthToken();
+
+
 
         // Handle photo upload
         if ($request->hasFile('photo')) {

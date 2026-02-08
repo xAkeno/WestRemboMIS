@@ -22,7 +22,8 @@ class StoreResidentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'resident_id' => 'required|string|unique:residents,resident_id|max:50',
+            // 'resident_id' => 'required|string|unique:residents,resident_id|max:50',
+            'requester_type' => 'required|string|max:50',
             'prefix' => 'nullable|string|max:10',
             'surname' => 'required|string|max:100',
             'first_name' => 'required|string|max:100',

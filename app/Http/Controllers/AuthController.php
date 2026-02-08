@@ -288,6 +288,7 @@ class AuthController extends Controller
                 'name' => $fullName,
                 'url_photo' => $user->url_photo,
                 'role' => $user->role ?? 'Staff',
+                'permissions' => $user->permissions ? json_decode($user->permissions) : [],
                 'status' => $user->status,
             ]
         ], 200);
