@@ -13,6 +13,7 @@ use App\Http\Controllers\LatestDashboard;
 use App\Http\Controllers\KioskController;
 use App\Http\Controllers\BackupController;
 use Illuminate\Support\Facades\Artisan;
+use App\Http\Controllers\DocumentController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 // Kiosk endpoint
@@ -96,6 +97,9 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/backup', [BackupController::class, 'listBackups']);
     Route::get('/backup/{id}/download', [BackupController::class, 'downloadBackup']);
 
+    Route::get('/documents', [DocumentController::class, 'index']);
+    Route::post('/documents/{document}', [DocumentController::class, 'update']);
+    Route::post('/documents', [DocumentController::class, 'store']);
 
 
 
