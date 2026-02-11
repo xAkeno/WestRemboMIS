@@ -11,6 +11,8 @@ use App\Http\Middleware\EnsureTokenIsValid;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\LatestDashboard;
 use App\Http\Controllers\KioskController;
+use App\Http\Controllers\BackupController;
+use Illuminate\Support\Facades\Artisan;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 // Kiosk endpoint
@@ -77,7 +79,27 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
 
     Route::get('/latest-activities', [LatestDashboard::class, 'latestActivity']);
     Route::post('/kiosk/search', [KioskController::class, 'search']);
-    
+
+
+
+    Route::get('/check-shell', function() {
+        if(function_exists('shell_exec')) {
+            return "shell_exec is enabled";
+        }
+        return "shell_exec is NOT enabled";
+    });
+
+    Route::post('/backup/full', [BackupController::class, 'runFullBackup']);
+    Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
+    Route::post('/backup/files', [BackupController::class, 'runImagesBackup']);
+
+    Route::get('/backup', [BackupController::class, 'listBackups']);
+    Route::get('/backup/{id}/download', [BackupController::class, 'downloadBackup']);
+
+
+
+
+
     Route::post('/logout', [AuthController::class, 'logout']);
 });
 

@@ -48,7 +48,7 @@ return [
 
         'mysql' => [
             'driver' => 'mysql',
-            'url' => env('DB_URL'),
+            'url' => null,
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
             'database' => env('DB_DATABASE', 'barangay_mis'),
@@ -64,6 +64,11 @@ return [
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
+            'dump' => [
+                'dump_binary_path' => 'C:/xampp/mysql/bin/', // ← important
+                'use_single_transaction' => true,            // avoids table locks
+                'add_extra_option' => '--skip-lock-tables',  // optional but safer on Windows
+            ],
         ],
 
         'mariadb' => [
@@ -170,6 +175,13 @@ return [
         ],
 
     ],
+    'dump' => [
+        'dump_binary_path' => 'C:/xampp/mysql/bin/',
+        'use_single_transaction' => true,
+        'add_extra_option' => '--skip-lock-tables --no-tablespaces --protocol=TCP',
+        'timeout' => 60,
+    ],
+
 
 ];
 
