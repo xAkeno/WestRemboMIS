@@ -13,27 +13,47 @@ return new class extends Migration
     {
         // Change default status for residents table
         Schema::table('residents', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            if (Schema::hasColumn('residents', 'status')) {
+                $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            } else {
+                $table->string('status', 50)->nullable()->default('ENCODED');
+            }
         });
 
         // Change default status for barangay_business_clearances table
         Schema::table('barangay_business_clearances', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            if (Schema::hasColumn('barangay_business_clearances', 'status')) {
+                $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            } else {
+                $table->string('status', 50)->nullable()->default('ENCODED');
+            }
         });
 
         // Change default status for barangay_building_clearances table
         Schema::table('barangay_building_clearances', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            if (Schema::hasColumn('barangay_building_clearances', 'status')) {
+                $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            } else {
+                $table->string('status', 50)->nullable()->default('ENCODED');
+            }
         });
 
         // Change default status for barangay_clearances table
         Schema::table('barangay_clearances', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            if (Schema::hasColumn('barangay_clearances', 'status')) {
+                $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            } else {
+                $table->string('status', 50)->nullable()->default('ENCODED');
+            }
         });
 
         // Change default status for barangay_certificates table
         Schema::table('barangay_certificates', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            if (Schema::hasColumn('barangay_certificates', 'status')) {
+                $table->string('status', 50)->nullable()->default('ENCODED')->change();
+            } else {
+                $table->string('status', 50)->nullable()->default('ENCODED');
+            }
         });
     }
 
@@ -42,25 +62,34 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Revert status defaults back to PENDING
         Schema::table('residents', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('PENDING')->change();
+            if (Schema::hasColumn('residents', 'status')) {
+                $table->string('status', 50)->nullable()->default('PENDING')->change();
+            }
         });
 
         Schema::table('barangay_business_clearances', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('PENDING')->change();
+            if (Schema::hasColumn('barangay_business_clearances', 'status')) {
+                $table->string('status', 50)->nullable()->default('PENDING')->change();
+            }
         });
 
         Schema::table('barangay_building_clearances', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('PENDING')->change();
+            if (Schema::hasColumn('barangay_building_clearances', 'status')) {
+                $table->string('status', 50)->nullable()->default('PENDING')->change();
+            }
         });
 
         Schema::table('barangay_clearances', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('PENDING')->change();
+            if (Schema::hasColumn('barangay_clearances', 'status')) {
+                $table->string('status', 50)->nullable()->default('PENDING')->change();
+            }
         });
 
         Schema::table('barangay_certificates', function (Blueprint $table) {
-            $table->string('status', 50)->nullable()->default('PENDING')->change();
+            if (Schema::hasColumn('barangay_certificates', 'status')) {
+                $table->string('status', 50)->nullable()->default('PENDING')->change();
+            }
         });
     }
 };

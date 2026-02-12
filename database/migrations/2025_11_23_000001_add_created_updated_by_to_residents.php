@@ -8,8 +8,8 @@ return new class extends Migration {
     public function up()
     {
         Schema::table('residents', function (Blueprint $table) {
-            $table->unsignedBigInteger('created_by')->nullable()->index()->after('status');
-            $table->unsignedBigInteger('updated_by')->nullable()->index()->after('created_by');
+            $table->unsignedBigInteger('created_by')->nullable()->index();
+            $table->unsignedBigInteger('updated_by')->nullable()->index();
             $table->foreign('created_by')->references('id')->on('users')->onDelete('set null');
             $table->foreign('updated_by')->references('id')->on('users')->onDelete('set null');
         });
