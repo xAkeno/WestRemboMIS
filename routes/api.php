@@ -100,7 +100,20 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/documents', [DocumentController::class, 'index']);
     Route::post('/documents/{document}', [DocumentController::class, 'update']);
     Route::post('/documents', [DocumentController::class, 'store']);
+    Route::get('/documents/single/{id}', [DocumentController::class, 'show']);
+    // routes/web.php
+    Route::get('/documents/{filename}', function ($filename) {
+        $path = storage_path('app/public/documents/' . $filename);
 
+        if (!file_exists($path)) {
+            abort(404);
+        }
+
+        return response()->file($path, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+        ]);
+    });
 
 
 

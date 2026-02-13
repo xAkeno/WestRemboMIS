@@ -24,6 +24,35 @@ class DocumentController extends Controller
         return response()->json($documents);
     }
 
+    public function show($id)
+    {
+        // Find the document by ID
+        $document = Document::find($id);
+
+        if (!$document) {
+            return response()->json(['message' => 'Document not found'], 404);
+        }
+
+        // Full storage path to the file
+        $filePath = storage_path('app/' . $document->file_path);
+
+        if (!file_exists($filePath)) {
+            return response()->json(['message' => 'File not found on server'], 404);
+        }
+
+        return response()->json([
+            'id' => $document->id,
+            'name' => $document->name,
+            'file_name' => $document->file_name,
+            'file_path' => $document->file_path,
+            'file_url' => url('/documents/' . $document->file_name), // URL for frontend to fetch PDF
+        ]);
+    }
+
+
+
+
+
     // CREATE if not exists
     public function store(Request $request)
     {
