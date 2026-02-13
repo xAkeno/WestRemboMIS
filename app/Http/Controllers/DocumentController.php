@@ -15,6 +15,7 @@ class DocumentController extends Controller
                 'id' => $doc->id,
                 'name' => $doc->name,
                 'file_name' => $doc->file_name,
+                'layout' => $doc->layout,
                 'file_url' => $doc->file_path
                     ? url('storage/' . str_replace('public/', '', $doc->file_path))
                     : null,
@@ -44,6 +45,7 @@ class DocumentController extends Controller
             'id' => $document->id,
             'name' => $document->name,
             'file_name' => $document->file_name,
+            'layout' => $document->layout,
             'file_path' => $document->file_path,
             'file_url' => url('/documents/' . $document->file_name), // URL for frontend to fetch PDF
         ]);
@@ -59,6 +61,7 @@ class DocumentController extends Controller
         $request->validate([
             'name' => 'required|string',
             'file' => 'required|mimes:pdf|max:10240',
+            'layout' => 'nullable|json',
         ]);
 
         $file = $request->file('file');
@@ -68,9 +71,29 @@ class DocumentController extends Controller
             'name' => $request->name,
             'file_path' => $path,
             'file_name' => $file->getClientOriginalName(),
+            'layout' => $request->input('layout'),
         ]);
 
         return response()->json($document);
+    }
+
+    public function updateLayout(Request $request, $id)
+    {
+        $request->validate([
+            'layout' => 'required|array'
+        ]);
+
+        $document = Document::findOrFail($id);
+
+        // Replace layout completely
+        $document->layout = $request->layout;
+
+        $document->save();
+
+        return response()->json([
+            'message' => 'Layout updated successfully',
+            'layout' => $document->layout
+        ]);
     }
 
     // UPDATE if exists
@@ -78,6 +101,7 @@ class DocumentController extends Controller
     {
         $request->validate([
             'file' => 'required|mimes:pdf|max:10240',
+            'layout' => 'nullable|json',
         ]);
 
         if ($document->file_path && Storage::exists($document->file_path)) {

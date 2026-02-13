@@ -13,5 +13,6 @@ class Document extends Model
         'name',
         'file_path',
         'file_name',
+        'layout',
     ];
 }

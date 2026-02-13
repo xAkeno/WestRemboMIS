@@ -101,6 +101,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::post('/documents/{document}', [DocumentController::class, 'update']);
     Route::post('/documents', [DocumentController::class, 'store']);
     Route::get('/documents/single/{id}', [DocumentController::class, 'show']);
+    Route::put('/documents/{id}/layout', [DocumentController::class, 'updateLayout']);
     // routes/web.php
     Route::get('/documents/{filename}', function ($filename) {
         $path = storage_path('app/public/documents/' . $filename);
