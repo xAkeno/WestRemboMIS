@@ -170,9 +170,9 @@ class AuthController extends Controller
             ], 401);
         }
 
-        // $user->update([
-        //     'status' => 'active',
-        // ]);
+        $user->update([
+            'status' => 'active',
+        ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -301,10 +301,10 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        // // Update status to 'inactive'
-        // $user->update([
-        //     'status' => 'inactive',
-        // ]);
+        // Update status to 'inactive'
+        $user->update([
+            'status' => 'inactive',
+        ]);
 
         // Delete current access token
         $user->currentAccessToken()->delete();
