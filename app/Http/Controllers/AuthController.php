@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Http\Requests\UpdateUserRequest;
-
+use App\Models\ActivityLogger;
 class AuthController extends Controller
 {
     /**
@@ -188,6 +188,14 @@ class AuthController extends Controller
             false,      // raw
             'None'       // sameSite safe for local dev
         );
+
+        activity_log(
+            'User Logged In',
+            'login_attempt',
+            'Successful login',
+            $user
+        );
+
 
         return response()->json([
             'status' => 'success',
