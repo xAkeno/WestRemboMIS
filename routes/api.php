@@ -18,7 +18,8 @@ use App\Http\Controllers\DocumentController;
 Route::post('/login', [AuthController::class, 'login']);
 // Kiosk endpoint
 Route::post('/kiosk/submit', [\App\Http\Controllers\KioskController::class, 'submit']);
-
+//register 
+Route::post('/register', [AuthController::class, 'register']);
 // // Handle preflight requests
 // Route::options('/*', function () {
 //     return response()->json([], 200);
@@ -26,7 +27,6 @@ Route::post('/kiosk/submit', [\App\Http\Controllers\KioskController::class, 'sub
 
 // All routes - no authentication required
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
-    Route::post('/register', [AuthController::class, 'register']);
     Route::get('/getAllUser', [AuthController::class, 'index']);
     Route::get('/users/{id}', [AuthController::class, 'show']);
     Route::put('/users/{id}/permissions', [AuthController::class, 'updatePermissions']);

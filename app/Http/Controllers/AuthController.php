@@ -17,17 +17,33 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'first_name' => 'required|string|max:255',
+            'surname' => 'required|string|max:255',
+            'email' => 'required|email:rfc,dns|max:255|unique:users,email',
+            'contact' => 'required|regex:/^[0-9+\-() ]+$/|max:20',
+            'date_of_birth' => 'required|date',
+            'gender' => 'required|in:male,female,other',
             'password' => 'required|string|min:8|confirmed',
+            'id_url' => 'required|image|mimes:jpg,jpeg,png|max:2048', // 👈 added
         ]);
 
+        // ✅ Store image
+        $imagePath = null;
+
+        if ($request->hasFile('id_url')) {
+            $imagePath = $request->file('id_url')->store('ids', 'public');
+        }
+
+        // ✅ Create user
         $user = User::create([
-            'name' => $request->name,
+            'first_name' => $request->first_name,
+            'surname' => $request->surname,
             'email' => $request->email,
-            'username' => $request->username,
+            'contact' => $request->contact,
+            'gender' => $request->gender,
+            'date_of_birth' => $request->date_of_birth,
             'password' => Hash::make($request->password),
-            'permissions' => json_encode($request->permissions),
+            'id_url' => $imagePath, // 👈 save file path
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -157,11 +173,11 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'username' => 'required',
+            'email' => 'required',
             'password' => 'required',
         ]);
 
-        $user = User::where('username', $request->username)->first();
+        $user = User::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([

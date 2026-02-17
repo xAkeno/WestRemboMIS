@@ -72,6 +72,9 @@ return new class extends Migration
             $table->string('role')->nullable()->default('USER');
             $table->string('status')->nullable()->default('inactive');
 
+            //id
+            $table->string('id_url')->nullable();
+
             $table->timestamps();
         });
 
@@ -91,6 +94,50 @@ return new class extends Migration
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        // Insert default normal user
+        DB::table('users')->insert([
+            'prefix'     => 'Mr.',
+            'first_name' => 'Clark',
+            'surname'    => 'Raguhos',
+            'middle_name'=> null,
+            'extension_name' => null,
+            'nickname'   => 'Clark',
+
+            'sex'        => 'Male',
+            'marital_status' => null,
+            'name_of_spouse' => null,
+
+            'date_of_birth' => '2000-06-18',
+            'place_of_birth'=> 'Philippines',
+
+            'email'      => 'clarkkentraguhos@gmail.com',
+            'contact_number' => '09123456789',
+
+            'house_block_lot_no' => null,
+            'street'     => null,
+            'zone_purok' => null,
+
+            'resident_status' => 'Resident',
+            'period_of_residency' => '5 years',
+
+            'voter_status' => 'Registered',
+
+            'username'   => 'clarkuser',
+            'password'   => Hash::make('password123'),
+
+            'permissions'=> json_encode([
+                'doc_req',
+                'certificate'
+            ]),
+
+            'role'       => 'USER',
+            'status'     => 'active',
+
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
 
     }
 

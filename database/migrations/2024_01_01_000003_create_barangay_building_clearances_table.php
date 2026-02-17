@@ -16,7 +16,6 @@ return new class extends Migration
         Schema::create('barangay_building_clearances', function (Blueprint $table) {
             $table->id();
             $table->string('bcert_number')->nullable();
-            $table->unsignedBigInteger('requester_id')->nullable();
             $table->string('requester_type')->nullable();
             $table->date('issuedDate')->nullable();
             $table->string('prefix')->nullable();
