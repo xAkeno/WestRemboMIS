@@ -10,7 +10,7 @@ use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Models\Ticket;
-
+use Illuminate\Support\Str;
 class BarangayBuildingClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -22,31 +22,31 @@ class BarangayBuildingClearanceController extends Controller
         $query = BarangayBuildingClearance::query();
 
         // Search functionality
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->search;
+
             $query->where(function ($q) use ($search) {
                 $q->where('surname', 'like', "%{$search}%")
-                ->orWhere('firstname', 'like', "%{$search}%")
-                ->orWhere('middlename', 'like', "%{$search}%")
-                ->orWhere('bcert_number', 'like', "%{$search}%")
-                ->orWhere('houseBlockLot', 'like', "%{$search}%")
-                ->orWhere('street', 'like', "%{$search}%")
-                ->orWhere('zone', 'like', "%{$search}%")
-                ->orWhere('purpose', 'like', "%{$search}%")
-                ->orWhere('orNo', 'like', "%{$search}%")
-                ->orWhere('remarks', 'like', "%{$search}%")
-                // Search by combined full name
-                ->orWhereRaw("CONCAT(firstname, ' ', surname) LIKE ?", ["%{$search}%"]);
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('middle_name', 'like', "%{$search}%")
+                    ->orWhere('bcert_number', 'like', "%{$search}%")
+                    ->orWhere('house_block_lot_no', 'like', "%{$search}%")
+                    ->orWhere('street', 'like', "%{$search}%")
+                    ->orWhere('zone', 'like', "%{$search}%")
+                    ->orWhere('purpose', 'like', "%{$search}%")
+                    ->orWhere('or_no', 'like', "%{$search}%")
+                    ->orWhere('remarks', 'like', "%{$search}%")
+                    ->orWhereRaw("CONCAT(first_name, ' ', surname) LIKE ?", ["%{$search}%"]);
             });
         }
 
         // Filter by zone
-        if ($request->has('zone')) {
+        if ($request->filled('zone')) {
             $query->where('zone', $request->zone);
         }
 
-        // Filter by date
-        if ($request->has('filter_date')) {
+        // Filter by date presets
+        if ($request->filled('filter_date')) {
             $filter = $request->filter_date;
 
             if ($filter === 'this_week') {
@@ -62,21 +62,31 @@ class BarangayBuildingClearanceController extends Controller
             }
         }
 
-        // Filter by from-to dates
-        if ($request->has('from') && $request->has('to')) {
+        // Custom date range
+        if ($request->filled('from') && $request->filled('to')) {
             $query->whereBetween('created_at', [
                 $request->from . ' 00:00:00',
                 $request->to . ' 23:59:59'
             ]);
         }
 
-        // Filter by status (commented out for now)
-        if ($request->has('status')) {
+        // Filter by status
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        $perPage = $request->get('per_page', 15);
-        $clearances = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        // Sorting (FIX for issuedDate issue)
+        $sortField = $request->get('sortField', 'created_at');
+        $sortDirection = $request->get('sortDirection', 'desc');
+
+        // Convert camelCase to snake_case automatically
+        $sortField = Str::snake($sortField);
+
+        $perPage = $request->get('pageSize', 15);
+
+        $clearances = $query
+            ->orderBy($sortField, $sortDirection)
+            ->paginate($perPage);
 
         return response()->json([
             'status' => 'success',

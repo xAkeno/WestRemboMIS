@@ -14,12 +14,17 @@ use App\Http\Controllers\KioskController;
 use App\Http\Controllers\BackupController;
 use Illuminate\Support\Facades\Artisan;
 use App\Http\Controllers\DocumentController;
+use App\Http\Controllers\StreetController;
+
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 // Kiosk endpoint
 Route::post('/kiosk/submit', [\App\Http\Controllers\KioskController::class, 'submit']);
 //register 
 Route::post('/register', [AuthController::class, 'register']);
+
+Route::apiResource('streets', StreetController::class);
+
 // // Handle preflight requests
 // Route::options('/*', function () {
 //     return response()->json([], 200);
