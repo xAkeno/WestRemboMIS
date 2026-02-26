@@ -15,7 +15,7 @@ use App\Http\Controllers\BackupController;
 use Illuminate\Support\Facades\Artisan;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\StreetController;
-
+use App\Http\Controllers\EventController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 // Kiosk endpoint
@@ -25,6 +25,9 @@ Route::post('/register', [AuthController::class, 'register']);
 
 Route::apiResource('streets', StreetController::class);
 
+Route::apiResource('events', EventController::class);
+
+Route::get('/public-events', [EventController::class, 'publicIndex']);
 // // Handle preflight requests
 // Route::options('/*', function () {
 //     return response()->json([], 200);
@@ -39,7 +42,6 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/details', [AuthController::class, 'details']);
     Route::post('/uploadProfileImage', [AuthController::class, 'uploadProfileImage']);
     Route::put('/updateProfile', [AuthController::class, 'updateProfile']);
-
     Route::apiResource('residents', ResidentController::class);
     Route::apiResource('business-clearances', BarangayBusinessClearanceController::class);
     Route::apiResource('building-clearances', BarangayBuildingClearanceController::class);
