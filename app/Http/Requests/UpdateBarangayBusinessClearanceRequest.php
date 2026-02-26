@@ -6,44 +6,35 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateBarangayBusinessClearanceRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
         return true;
     }
 
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
         return [
-            'brgyBusinessNo'     => 'nullable|string|max:50',
-            'issuedDate'         => 'nullable|date',
+            'brgy_business_no'   => 'nullable|string|max:50',
+            'issued_date'        => 'nullable|date',
             'prefix'             => 'nullable|string|max:10',
             'surname'            => 'sometimes|required|string|max:100',
-            'firstname'          => 'sometimes|required|string|max:100',
-            'middlename'         => 'nullable|string|max:100',
-            'ext'                => 'nullable|string|max:10',
-            'businessName'       => 'nullable|string|max:200',
-            'businessType'       => 'nullable|string|max:100',
-            'businessDetails'    => 'nullable|string|max:500',
+            'first_name'         => 'sometimes|required|string|max:100',
+            'middle_name'        => 'nullable|string|max:100',
+            'ext_name'           => 'nullable|string|max:10',
+            'business_name'      => 'nullable|string|max:200',
+            'business_type'      => 'nullable|string|max:100',
+            'business_details'   => 'nullable|string|max:500',
             'capital'            => 'nullable|numeric|min:0',
-            'houseBlockLotNo'    => 'nullable|string|max:50',
+            'house_block_lot_no' => 'nullable|string|max:50',
             'street'             => 'nullable|string|max:100',
             'zone'               => 'nullable|string|max:50',
-            'orNo'               => 'nullable|string|max:50',
-            'inspectedBy'        => 'nullable|string|max:100',
-            'dateOfInspection'   => 'nullable|date',
-            'inspectionRemarks'  => 'nullable|string|max:500',
-            'inspectedRemarks'   => 'nullable|string|max:500',
-            'dateInspected'      => 'nullable|date',
-            'inspectedNote'      => 'nullable|string|max:500',
+            'or_no'              => 'nullable|string|max:50',
+            'inspected_by'       => 'nullable|string|max:100',
+            'date_of_inspection' => 'nullable|date',
+            'inspection_remarks' => 'nullable|string|max:500',
+            'inspected_remarks'  => 'nullable|string|max:500',
+            'date_inspected'     => 'nullable|date',
+            'inspected_note'     => 'nullable|string|max:500',
         ];
     }
 }
-

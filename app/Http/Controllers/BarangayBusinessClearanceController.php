@@ -10,7 +10,7 @@ use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Ticket;
-
+use Illuminate\Support\Facades\Log;
 class BarangayBusinessClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -26,19 +26,19 @@ class BarangayBusinessClearanceController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('surname', 'like', "%{$search}%")
-                ->orWhere('firstname', 'like', "%{$search}%")
-                ->orWhere('middlename', 'like', "%{$search}%")
-                ->orWhere('brgyBusinessNo', 'like', "%{$search}%")
-                ->orWhere('businessName', 'like', "%{$search}%")
-                ->orWhere('businessType', 'like', "%{$search}%")
+                ->orWhere('first_name', 'like', "%{$search}%")
+                ->orWhere('middle_name', 'like', "%{$search}%")
+                ->orWhere('brgy_business_no', 'like', "%{$search}%")
+                ->orWhere('business_name', 'like', "%{$search}%")
+                ->orWhere('business_type', 'like', "%{$search}%")
                 ->orWhere('capital', 'like', "%{$search}%")
                 ->orWhere('street', 'like', "%{$search}%")
                 ->orWhere('zone', 'like', "%{$search}%")
-                ->orWhere('inspectedBy', 'like', "%{$search}%")
-                ->orWhere('inspectionRemarks', 'like', "%{$search}%")
-                ->orWhere('inspectedRemarks', 'like', "%{$search}%")
+                ->orWhere('inspected_by', 'like', "%{$search}%")
+                ->orWhere('inspection_remarks', 'like', "%{$search}%")
+                ->orWhere('inspected_remarks', 'like', "%{$search}%")
                 // Search by combined full name
-                ->orWhereRaw("CONCAT(firstname, ' ', surname) LIKE ?", ["%{$search}%"]);
+                ->orWhereRaw("CONCAT(first_name, ' ', surname) LIKE ?", ["%{$search}%"]);
             });
         }
 
@@ -152,12 +152,12 @@ class BarangayBusinessClearanceController extends Controller
         //     $data['attachment'] = $attachmentPath;
         // }
         $lastResident = BarangayBusinessClearance::latest('created_at')->first();
-        $lastNumber = $lastResident ? intval(substr($lastResident->brgyBusinessNo, 11)) : 0;
+        $lastNumber = $lastResident ? intval(substr($lastResident->brgy_business_no, 11)) : 0;
         $newRecord = 'BBUSINESS-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
         $data = $request->validated();
 
-        $data['brgyBusinessNo'] = $newRecord;
+        $data['brgy_business_no'] = $newRecord;
         $data["status"] = "ENCODED";
         $data['created_by'] = $this->getUserIdFromAuthToken();
         $data['updated_by'] = $this->getUserIdFromAuthToken();
@@ -202,7 +202,7 @@ class BarangayBusinessClearanceController extends Controller
     }
     public function latestRecord(){
         $lastResident = BarangayBusinessClearance::latest('created_at')->first();
-        $lastNumber = $lastResident ? intval(substr($lastResident->brgyBusinessNo, 11)) : 0;
+        $lastNumber = $lastResident ? intval(substr($lastResident->brgy_business_no, 11)) : 0;
         $newRecord = 'BBUSINESS-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
         $lastId = BarangayBusinessClearance::latest('id')->first();
@@ -236,43 +236,23 @@ class BarangayBusinessClearanceController extends Controller
     /**
      * Update the specified resource in storage.
      */
-public function update(UpdateBarangayBusinessClearanceRequest $request, BarangayBusinessClearance $barangayBusinessClearance)
-{
-    $data = $request->validated();
+    public function update(UpdateBarangayBusinessClearanceRequest $request, $id)
+    {
+        $barangayBusinessClearance = BarangayBusinessClearance::findOrFail($id);
 
-    // Map frontend keys to database/model fields
-    $data['businessName'] = $data['establishment'] ?? $data['businessName'] ?? null;
-    $data['houseBlockLotNo'] = $data['houseBlockLot'] ?? $data['houseBlockLotNo'] ?? null;
-    $data['ext'] = $data['extension'] ?? $data['ext'] ?? null;
+        \Log::info('Route ID:', ['id' => $id]);
+        \Log::info('Found Record:', $barangayBusinessClearance->toArray());
 
-    // Format dates to 'Y-m-d' for MySQL DATE
-    foreach (['issuedDate', 'dateOfInspection', 'dateInspected'] as $dateField) {
-        if (isset($data[$dateField]) && $data[$dateField]) {
-            $data[$dateField] = date('Y-m-d', strtotime($data[$dateField]));
-        }
+        $data = $request->validated();
+
+        $barangayBusinessClearance->update($data);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Business clearance updated successfully',
+            'data' => $barangayBusinessClearance->fresh(),
+        ]);
     }
-
-    // Handle attachment upload
-    if ($request->hasFile('attachment')) {
-        if ($barangayBusinessClearance->attachment) {
-            Storage::disk('public')->delete($barangayBusinessClearance->attachment);
-        }
-        $attachment = $request->file('attachment');
-        $data['attachment'] = $attachment->store('clearances/business/attachments', 'public');
-    }
-
-    // Update only fillable fields
-    $fillable = $barangayBusinessClearance->getFillable();
-    $updateData = array_intersect_key($data, array_flip($fillable));
-
-    $barangayBusinessClearance->update($updateData);
-
-    return response()->json([
-        'status' => 'success',
-        'message' => 'Business clearance updated successfully',
-        'data' => $barangayBusinessClearance->fresh(),
-    ]);
-}
 
     public function total(Request $request){
         $total = BarangayBusinessClearance::count();
