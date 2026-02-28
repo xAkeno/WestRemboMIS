@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\ActivityLogger;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\VerificationCodeMail;
 class AuthController extends Controller
 {
     /**
@@ -43,19 +45,37 @@ class AuthController extends Controller
             'gender' => $request->gender,
             'date_of_birth' => $request->date_of_birth,
             'password' => Hash::make($request->password),
-            'id_url' => $imagePath, // 👈 save file path
+            'id_url' => $imagePath, 
         ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        // Generate 6-digit verification code
+        $code = rand(100000, 999999);
+        $user->update([
+            'email_verification_code' => $code,
+            'email_verification_expires_at' => now()->addMinutes(10),
+        ]);
+
+
+        // Send code via email
+        Mail::to($user->email)->send(new VerificationCodeMail($code));
+
+        // event(new Registered($user));
 
         return response()->json([
-            'status' => 'success',
-            'message' => 'User registered successfully',
-            'data' => [
-                'user' => $user,
-                'token' => $token,
-            ],
+            'message' => 'Account created. Please verify your email with the code sent.',
+            'data' => $user
         ], 201);
+
+        // $token = $user->createToken('auth_token')->plainTextToken;
+
+        // return response()->json([
+        //     'status' => 'success',
+        //     'message' => 'User registered successfully',
+        //     'data' => [
+        //         'user' => $user,
+        //         'token' => $token,
+        //     ],
+        // ], 201);
     }
 
     public function updateProfile(UpdateUserRequest $request)
@@ -318,6 +338,146 @@ class AuthController extends Controller
         ], 200);
     }
 
+    // ---------------- VERIFY EMAIL ----------------
+    public function verifyEmail(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|digits:6',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        if ($user->email_verified_at) {
+            return response()->json(['message' => 'Email already verified']);
+        }
+
+        if ($user->email_verification_code != $request->code || 
+            $user->email_verification_expires_at < now()) {
+            return response()->json(['message' => 'Invalid or expired code'], 400);
+        }
+
+        $user->update([
+            'email_verified_at' => now(),
+            'email_verification_code' => null,
+            'email_verification_expires_at' => null,
+        ]);
+        return response()->json(['message' => 'Email verified successfully']);
+    }
+
+    // ---------------- FORGOT PASSWORD ----------------
+    public function forgotPassword(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json(['message' => 'Account not found'], 404);
+        }
+
+        $code = rand(100000, 999999); // 6-digit code
+        $user->update([
+            'password_reset_code' => $code,
+            'password_reset_expires_at' => now()->addMinutes(15),
+        ]);
+
+        // Send code via email
+        Mail::to($user->email)->send(new \App\Mail\VerificationCodeMail($code));
+
+        return response()->json(['message' => 'Password reset code sent to email']);
+    }
+
+    // ---------------- RESET PASSWORD WITH CODE ----------------
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+            'code' => 'required|digits:6',
+            'password' => 'required|string|min:6|confirmed',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json(['message' => 'Account not found'], 404);
+        }
+
+        if ($user->password_reset_code != $request->code || $user->password_reset_expires_at < now()) {
+            return response()->json(['message' => 'Invalid or expired code'], 400);
+        }
+
+        $user->update([
+            'password' => Hash::make($request->password),
+            'password_reset_code' => null,
+            'password_reset_expires_at' => null,
+        ]);
+
+        return response()->json(['message' => 'Password reset successful']);
+    }
+
+    // ---------------- RESEND EMAIL VERIFICATION ----------------
+    public function resendVerificationCode(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+
+        if ($user->email_verified_at) {
+            return response()->json(['message' => 'Email already verified'], 400);
+        }
+
+        // Generate new 6-digit code
+        $code = rand(100000, 999999);
+
+        $user->update([
+            'email_verification_code' => $code,
+            'email_verification_expires_at' => now()->addMinutes(10),
+        ]);
+
+        Mail::to($user->email)->send(new VerificationCodeMail($code));
+
+        return response()->json([
+            'message' => 'New verification code sent successfully'
+        ]);
+    }
+    // ---------------- RESEND PASSWORD RESET CODE ----------------
+    public function resendPasswordResetCode(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'Account not found'], 404);
+        }
+
+        // Generate new 6-digit code
+        $code = rand(100000, 999999);
+
+        $user->update([
+            'password_reset_code' => $code,
+            'password_reset_expires_at' => now()->addMinutes(15),
+        ]);
+
+        Mail::to($user->email)->send(new \App\Mail\VerificationCodeMail($code));
+
+        return response()->json([
+            'message' => 'New password reset code sent successfully'
+        ]);
+    }
+
+
 
 
 
@@ -325,18 +485,34 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        // Update status to 'inactive'
-        $user->update([
-            'status' => 'inactive',
-        ]);
+        if ($user) {
+            // Update status safely
+            $user->update([
+                'status' => 'inactive',
+            ]);
 
-        // Delete current access token
-        $user->currentAccessToken()->delete();
+            // Delete token only if it exists
+            if ($request->user()->currentAccessToken()) {
+                $request->user()->currentAccessToken()->delete();
+            }
+        }
 
         return response()->json([
             'status' => 'success',
             'message' => 'Logged out successfully',
-        ]);
+        ])->withCookie(
+            cookie(
+                'auth_token',
+                '',
+                -1,           // Expire immediately
+                '/',          // MUST match path
+                null,         // MUST match domain
+                true,         // MUST match secure
+                true,         // httpOnly
+                false,
+                'None'        // MUST match SameSite
+            )
+        );
     }
 
 

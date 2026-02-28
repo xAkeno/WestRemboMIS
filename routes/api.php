@@ -20,6 +20,13 @@ use App\Http\Controllers\MyAllRequestsController;
 use App\Http\Controllers\ContactController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/verify', [AuthController::class, 'verifyEmail']);
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+Route::post('/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
+Route::post('/resend-password-reset-code', [AuthController::class, 'resendPasswordResetCode']);
+
+Route::post('/logout', [AuthController::class, 'logout']);
 // Kiosk endpoint
 Route::post('/kiosk/submit', [\App\Http\Controllers\KioskController::class, 'submit']);
 //register 
@@ -31,6 +38,21 @@ Route::apiResource('events', EventController::class);
 
 Route::get('/public-events', [EventController::class, 'publicIndex']);
 Route::post('/contact', [ContactController::class, 'submit']);
+ // Email verification routes
+Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
+    $request->fulfill();
+    return response()->json(['message' => 'Email verified successfully']);
+})->middleware(['signed'])->name('verification.verify');
+
+Route::post('/email/verification-notification', function (Request $request) {
+    $request->user()->sendEmailVerificationNotification();
+    return response()->json(['message' => 'Verification link sent']);
+})->middleware(['throttle:6,1'])->name('verification.send');
+
+// Example: only verified users can access this route
+Route::middleware('verified')->get('/dashboard', function() {
+    return response()->json(['message' => 'Welcome verified user']);
+});
 // // Handle preflight requests
 // Route::options('/*', function () {
 //     return response()->json([], 200);
@@ -129,9 +151,5 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
             'Content-Disposition' => 'inline; filename="' . $filename . '"',
         ]);
     });
-
-
-
-    Route::post('/logout', [AuthController::class, 'logout']);
 });
 
