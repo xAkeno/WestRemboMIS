@@ -157,6 +157,7 @@ class BarangaCertificateController extends Controller
             $data["created_by"] = $this->getUserIdFromAuthToken();
             $data["updated_by"] = $this->getUserIdFromAuthToken();
             $data["status"] = "ENCODED";
+            $data["issued_date"] = now()->toDateString();
 
             $barangaCertificate = BarangayCertificate::create($data);
 

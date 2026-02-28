@@ -131,7 +131,7 @@ return new class extends Migration
                 'certificate'
             ]),
 
-            'role'       => 'USER',
+            'role'       => 'STAFF',
             'status'     => 'active',
 
             'created_at' => now(),

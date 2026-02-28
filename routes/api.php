@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Artisan;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\StreetController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\MyAllRequestsController;
+use App\Http\Controllers\ContactController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 // Kiosk endpoint
@@ -28,6 +30,7 @@ Route::apiResource('streets', StreetController::class);
 Route::apiResource('events', EventController::class);
 
 Route::get('/public-events', [EventController::class, 'publicIndex']);
+Route::post('/contact', [ContactController::class, 'submit']);
 // // Handle preflight requests
 // Route::options('/*', function () {
 //     return response()->json([], 200);
@@ -48,6 +51,8 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::apiResource('barangay-clearances', BarangayClearanceController::class);
     Route::apiResource('barangay-certificates', BarangaCertificateController::class);
 
+    Route::get('/contact', [ContactController::class, 'showForm']);
+
     // Ticket system endpoints
     Route::post('/tickets', [\App\Http\Controllers\TicketController::class, 'store']);
     Route::get('/tickets/pending', [\App\Http\Controllers\TicketController::class, 'pending']);
@@ -59,6 +64,8 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
 
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
 
+    Route::get('/my-all-requests', [MyAllRequestsController::class, 'index']);
+    // Route::get('/my-all-requests/{id}', [MyAllRequestsController::class, 'show']);
     // Route::get('/latestRecordBrgyResident', [ResidentController::class, 'latestRecord']);
     Route::get('/latestRecordBrgyClearance', [BarangayClearanceController::class, 'latestRecord']);
     Route::get('/latestRecordBrgyBusiness', [BarangayBusinessClearanceController::class, 'latestRecord']);

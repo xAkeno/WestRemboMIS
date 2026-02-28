@@ -15,14 +15,14 @@ return new class extends Migration
             $table->id();
             $table->string('brgy_business_no')->nullable();       // was brgyBusinessNo
             $table->string('requester_type')->nullable();
-            $table->date('issued_date')->nullable();             // was issuedDate
+            $table->date('issued_date')->nullable();             // was issuedDate X
             $table->string('prefix')->nullable();
-            $table->string('surname')->nullable();
-            $table->string('first_name')->nullable();           // was firstname
-            $table->string('middle_name')->nullable();          // was middlename
+            $table->string('surname')->nullable();          // was surnameX
+            $table->string('first_name')->nullable();           // was firstnameX
+            $table->string('middle_name')->nullable();          // was middlenameX
             $table->string('ext_name')->nullable();             // was ext
-            $table->string('business_name')->nullable();        // was businessName
-            $table->string('business_type')->nullable();        // was businessType
+            $table->string('business_name')->nullable();        // was businessName X
+            $table->string('business_type')->nullable();        // was businessType X
             $table->text('business_details')->nullable();       // was businessDetails
             $table->decimal('capital', 15, 2)->nullable();
             $table->string('house_block_lot_no')->nullable();   // was houseBlockLotNo

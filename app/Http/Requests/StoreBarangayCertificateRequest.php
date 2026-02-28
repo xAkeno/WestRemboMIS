@@ -10,7 +10,6 @@
         public function rules(): array
         {
             return [
-                'issued_date' => 'required|date',
                 'requester_type' => 'required|string|max:50',
                 'prefix' => 'nullable|string|max:10',
                 'firstname' => 'required|string|max:100',
