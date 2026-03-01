@@ -89,22 +89,37 @@ return new class extends Migration
 
         // Insert default admin
         DB::table('users')->insert([
+            'prefix' => 'Mr.',
             'first_name' => 'Admin',
-            'surname'    => 'User',
-            'username'   => 'admin',
-            'email'      => 'admin@example.com',
-            'password'   => Hash::make('admin123'),
-            'date_of_birth' => '2000-01-01', // or any valid date
-            'permissions'=> json_encode([
+            'middle_name' => null,
+            'surname' => 'User',
+            'extension_name' => null,
+            'nickname' => 'Admin',
+            'sex' => 'Other', // Provide a valid non-null value
+            'marital_status' => null,
+            'name_of_spouse' => null,
+            'date_of_birth' => '2000-01-01',
+            'place_of_birth' => 'Philippines',
+            'email' => 'admin@example.com',
+            'contact_number' => null,
+            'house_block_lot_no' => null,
+            'street' => null,
+            'zone_purok' => null,
+            'resident_status' => 'Resident',
+            'period_of_residency' => '10 years',
+            'voter_status' => 'Registered',
+            'username' => 'admin',
+            'password' => Hash::make('admin123'),
+            'permissions' => json_encode([
                 'resident','doc_req','certificate','cashier','reports','settings'
             ]),
-            'role'       => 'ADMIN',
-            'status'     => 'active',
+            'role' => 'ADMIN',
+            'status' => 'active',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        // Insert default normal user
+        // Default normal user
         DB::table('users')->insert([
             'prefix'     => 'Mr.',
             'first_name' => 'Clark',
@@ -112,37 +127,27 @@ return new class extends Migration
             'middle_name'=> null,
             'extension_name' => null,
             'nickname'   => 'Clark',
-
             'sex'        => 'Male',
             'marital_status' => null,
             'name_of_spouse' => null,
-
             'date_of_birth' => '2000-06-18',
             'place_of_birth'=> 'Philippines',
-
             'email'      => 'clarkkentraguhos@gmail.com',
             'contact_number' => '09123456789',
-
             'house_block_lot_no' => null,
             'street'     => null,
             'zone_purok' => null,
-
             'resident_status' => 'Resident',
             'period_of_residency' => '5 years',
-
             'voter_status' => 'Registered',
-
             'username'   => 'clarkuser',
             'password'   => Hash::make('password123'),
-
             'permissions'=> json_encode([
                 'doc_req',
                 'certificate'
             ]),
-
             'role'       => 'STAFF',
             'status'     => 'active',
-
             'created_at' => now(),
             'updated_at' => now(),
         ]);
