@@ -8,24 +8,22 @@ use Illuminate\Support\Facades\Hash;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
 
             // Name details
-            $table->string('prefix')->nullable(); // Mr., Ms., etc.
+            $table->string('prefix')->nullable();
             $table->string('surname');
             $table->string('first_name');
             $table->string('middle_name')->nullable();
-            $table->string('extension_name')->nullable(); // Jr., Sr., III
+            $table->string('extension_name')->nullable();
             $table->string('nickname')->nullable();
 
             // Personal info
-            $table->enum('sex', ['Male', 'Female']);
+            // ✅ FIXED HERE (added 'Other')
+            $table->enum('sex', ['Male', 'Female', 'Other']);
             $table->string('marital_status')->nullable();
             $table->string('name_of_spouse')->nullable();
             $table->string('url_photo')->nullable();
@@ -47,7 +45,7 @@ return new class extends Migration
 
             // Residency
             $table->string('resident_status')->nullable();
-            $table->string('period_of_residency')->nullable(); // e.g. 5 years
+            $table->string('period_of_residency')->nullable();
 
             // Voter info
             $table->enum('voter_status', ['Registered', 'Not Registered'])->nullable();
@@ -58,7 +56,7 @@ return new class extends Migration
             $table->string('occupation')->nullable();
             $table->string('position')->nullable();
 
-            // Health / Physical
+            // Health
             $table->boolean('pwd_status')->default(false);
             $table->integer('height_cm')->nullable();
             $table->integer('weight_kg')->nullable();
@@ -72,7 +70,6 @@ return new class extends Migration
             $table->string('role')->nullable()->default('USER');
             $table->string('status')->nullable()->default('inactive');
 
-            //
             $table->string('email_verification_code')->nullable();
             $table->timestamp('email_verification_expires_at')->nullable();
 
@@ -81,13 +78,12 @@ return new class extends Migration
 
             $table->timestamp('email_verified_at')->nullable();
 
-            //id
             $table->string('id_url')->nullable();
 
             $table->timestamps();
         });
 
-        // Insert default admin
+        // ✅ Default admin
         DB::table('users')->insert([
             'prefix' => 'Mr.',
             'first_name' => 'Admin',
@@ -95,7 +91,7 @@ return new class extends Migration
             'surname' => 'User',
             'extension_name' => null,
             'nickname' => 'Admin',
-            'sex' => 'Other', // Provide a valid non-null value
+            'sex' => 'Other', // Now valid
             'marital_status' => null,
             'name_of_spouse' => null,
             'date_of_birth' => '2000-01-01',
@@ -119,7 +115,7 @@ return new class extends Migration
             'updated_at' => now(),
         ]);
 
-        // Default normal user
+        // ✅ Default staff
         DB::table('users')->insert([
             'prefix'     => 'Mr.',
             'first_name' => 'Clark',
@@ -151,13 +147,8 @@ return new class extends Migration
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-
-
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('users');
