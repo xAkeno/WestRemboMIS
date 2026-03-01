@@ -7,5 +7,9 @@ php artisan migrate --force
 echo "Seeding StreetSeeder..."
 php artisan db:seed --class=StreetSeeder --force
 
-echo "Starting PHP-FPM..."
-php-fpm
+echo "Clearing cache..."
+php artisan config:clear
+php artisan cache:clear
+
+echo "Starting Laravel server..."
+php artisan serve --host=0.0.0.0 --port=${PORT:-10000}
