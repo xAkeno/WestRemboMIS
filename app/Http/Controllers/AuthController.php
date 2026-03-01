@@ -24,7 +24,7 @@ class AuthController extends Controller
             'email' => 'required|email:rfc,dns|max:255|unique:users,email',
             'contact' => 'required|regex:/^[0-9+\-() ]+$/|max:20',
             'date_of_birth' => 'required|date',
-            'sex' => 'required|in:male,female,other',
+            'sex' => 'required|in:Male,Female,Other',
             'password' => 'required|string|min:8|confirmed',
             'id_url' => 'required|image|mimes:jpg,jpeg,png|max:2048', // 👈 added
         ]);
