@@ -4,9 +4,6 @@ set -e
 echo "Running migrations..."
 php artisan migrate --force
 
-echo "Seeding StreetSeeder..."
-php artisan db:seed --class=StreetSeeder --force
-
 echo "Clearing cache..."
 php artisan config:clear
 php artisan cache:clear
