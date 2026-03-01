@@ -24,7 +24,7 @@ class AuthController extends Controller
             'email' => 'required|email:rfc,dns|max:255|unique:users,email',
             'contact' => 'required|regex:/^[0-9+\-() ]+$/|max:20',
             'date_of_birth' => 'required|date',
-            'gender' => 'required|in:male,female,other',
+            'sex' => 'required|in:male,female,other',
             'password' => 'required|string|min:8|confirmed',
             'id_url' => 'required|image|mimes:jpg,jpeg,png|max:2048', // 👈 added
         ]);
@@ -42,7 +42,7 @@ class AuthController extends Controller
             'surname' => $request->surname,
             'email' => $request->email,
             'contact' => $request->contact,
-            'gender' => $request->gender,
+            'sex' => $request->sex,
             'date_of_birth' => $request->date_of_birth,
             'password' => Hash::make($request->password),
             'id_url' => $imagePath, 
