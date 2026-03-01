@@ -17,5 +17,6 @@ class Contact extends Model
         'home_address',
         'subject',
         'message',
+        'status',
     ];
 }

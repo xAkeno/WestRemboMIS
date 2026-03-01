@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('home_address');
             $table->string('subject');
             $table->text('message');
+            $table->string('status')->default('new');
             $table->timestamps();
         });
     }

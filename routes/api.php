@@ -37,7 +37,7 @@ Route::apiResource('streets', StreetController::class);
 Route::apiResource('events', EventController::class);
 
 Route::get('/public-events', [EventController::class, 'publicIndex']);
-Route::post('/contact', [ContactController::class, 'submit']);
+Route::post('/contacts', [ContactController::class, 'submit']);
  // Email verification routes
 Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
     $request->fulfill();
@@ -73,7 +73,9 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::apiResource('barangay-clearances', BarangayClearanceController::class);
     Route::apiResource('barangay-certificates', BarangaCertificateController::class);
 
-    Route::get('/contact', [ContactController::class, 'showForm']);
+    Route::get('/contacts', [ContactController::class, 'index']);
+    Route::patch('/contacts/{id}/status', [ContactController::class, 'updateStatus']);
+    Route::post('/contacts/{id}/reply', [ContactController::class, 'reply']);
 
     // Ticket system endpoints
     Route::post('/tickets', [\App\Http\Controllers\TicketController::class, 'store']);
