@@ -8,10 +8,9 @@ use Illuminate\Support\Facades\Storage;
 
 class DocumentController extends Controller
 {
-    // List all documents
     public function index()
     {
-        $workerBaseUrl = env('R2_WORKER_URL'); // your Cloudflare Worker URL
+        $workerBaseUrl = env('R2_WORKER_URL'); // your Worker base URL
 
         $documents = Document::all()->map(function($doc) use ($workerBaseUrl) {
             return [
@@ -19,39 +18,31 @@ class DocumentController extends Controller
                 'name' => $doc->name,
                 'file_name' => $doc->file_name,
                 'layout' => $doc->layout,
-                'file_url' => $doc->file_path 
-                    ? $workerBaseUrl . '/' . $doc->file_path 
-                    : null,
+                'file_url' => $doc->file_path ? $workerBaseUrl . '/' . $doc->file_path : null, // full URL
             ];
         });
 
         return response()->json($documents);
     }
 
-    // Get single document
     public function show($id)
     {
         $document = Document::find($id);
-
         if (!$document) {
             return response()->json(['message' => 'Document not found'], 404);
         }
 
         $workerBaseUrl = env('R2_WORKER_URL');
-        $fileUrl = $document->file_path
-            ? $workerBaseUrl . '/' . $document->file_path
-            : null;
 
         return response()->json([
             'id' => $document->id,
             'name' => $document->name,
             'file_name' => $document->file_name,
             'layout' => $document->layout,
-            'file_url' => $fileUrl, // fixed here
+            'file_url' => $document->file_path ? $workerBaseUrl . '/' . $document->file_path : null,
         ]);
     }
 
-    // CREATE document
     public function store(Request $request)
     {
         $request->validate([
@@ -71,12 +62,16 @@ class DocumentController extends Controller
         ]);
 
         $workerBaseUrl = env('R2_WORKER_URL');
-        $document->file_url = $workerBaseUrl . '/' . $document->file_path;
 
-        return response()->json($document);
+        return response()->json([
+            'id' => $document->id,
+            'name' => $document->name,
+            'file_name' => $document->file_name,
+            'layout' => $document->layout,
+            'file_url' => $path ? $workerBaseUrl . '/' . $path : null,
+        ]);
     }
 
-    // UPDATE document file
     public function update(Request $request, Document $document)
     {
         $request->validate([
@@ -97,25 +92,13 @@ class DocumentController extends Controller
         ]);
 
         $workerBaseUrl = env('R2_WORKER_URL');
-        $document->file_url = $workerBaseUrl . '/' . $document->file_path;
-
-        return response()->json($document);
-    }
-
-    // Update layout only
-    public function updateLayout(Request $request, $id)
-    {
-        $request->validate([
-            'layout' => 'required|array'
-        ]);
-
-        $document = Document::findOrFail($id);
-        $document->layout = $request->layout;
-        $document->save();
 
         return response()->json([
-            'message' => 'Layout updated successfully',
-            'layout' => $document->layout
+            'id' => $document->id,
+            'name' => $document->name,
+            'file_name' => $document->file_name,
+            'layout' => $document->layout,
+            'file_url' => $path ? $workerBaseUrl . '/' . $path : null,
         ]);
     }
 }
