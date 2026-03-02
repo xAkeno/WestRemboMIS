@@ -8,21 +8,27 @@ use Illuminate\Support\Facades\Storage;
 
 class DocumentController extends Controller
 {
+    // List all documents
     public function index()
     {
-        $documents = Document::all()->map(function($doc) {
+        $workerBaseUrl = env('R2_WORKER_URL'); // your Cloudflare Worker URL
+
+        $documents = Document::all()->map(function($doc) use ($workerBaseUrl) {
             return [
                 'id' => $doc->id,
                 'name' => $doc->name,
                 'file_name' => $doc->file_name,
                 'layout' => $doc->layout,
-                'file_url' => $doc->file_path,
+                'file_url' => $doc->file_path 
+                    ? $workerBaseUrl . '/' . $doc->file_path 
+                    : null,
             ];
         });
 
         return response()->json($documents);
     }
 
+    // Get single document
     public function show($id)
     {
         $document = Document::find($id);
@@ -41,15 +47,11 @@ class DocumentController extends Controller
             'name' => $document->name,
             'file_name' => $document->file_name,
             'layout' => $document->layout,
-            'file_url' => $document->fileUrl, // just path
+            'file_url' => $fileUrl, // fixed here
         ]);
     }
 
-
-
-
-
-    // CREATE if not exists
+    // CREATE document
     public function store(Request $request)
     {
         $request->validate([
@@ -59,7 +61,6 @@ class DocumentController extends Controller
         ]);
 
         $file = $request->file('file');
-        // store only the path in S3
         $path = Storage::disk('s3')->putFile('documents', $file);
 
         $document = Document::create([
@@ -69,29 +70,13 @@ class DocumentController extends Controller
             'layout' => $request->input('layout'),
         ]);
 
+        $workerBaseUrl = env('R2_WORKER_URL');
+        $document->file_url = $workerBaseUrl . '/' . $document->file_path;
+
         return response()->json($document);
     }
 
-    public function updateLayout(Request $request, $id)
-    {
-        $request->validate([
-            'layout' => 'required|array'
-        ]);
-
-        $document = Document::findOrFail($id);
-
-        // Replace layout completely
-        $document->layout = $request->layout;
-
-        $document->save();
-
-        return response()->json([
-            'message' => 'Layout updated successfully',
-            'layout' => $document->layout
-        ]);
-    }
-
-    // UPDATE if exists
+    // UPDATE document file
     public function update(Request $request, Document $document)
     {
         $request->validate([
@@ -111,7 +96,26 @@ class DocumentController extends Controller
             'file_name' => $file->getClientOriginalName(),
         ]);
 
+        $workerBaseUrl = env('R2_WORKER_URL');
+        $document->file_url = $workerBaseUrl . '/' . $document->file_path;
+
         return response()->json($document);
     }
 
+    // Update layout only
+    public function updateLayout(Request $request, $id)
+    {
+        $request->validate([
+            'layout' => 'required|array'
+        ]);
+
+        $document = Document::findOrFail($id);
+        $document->layout = $request->layout;
+        $document->save();
+
+        return response()->json([
+            'message' => 'Layout updated successfully',
+            'layout' => $document->layout
+        ]);
+    }
 }

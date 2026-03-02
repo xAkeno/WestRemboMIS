@@ -14,7 +14,7 @@ The office of **Barangay West Rembo** would like to inform you that a new commun
 @endif
 
 **Event Details Link:**  
-http://localhost:8000/calendar
+https://barangaywestrembo.onrender.com/calendar
 
 We encourage all residents to participate and stay informed.  
 
