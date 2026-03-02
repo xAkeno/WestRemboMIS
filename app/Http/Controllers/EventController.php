@@ -24,6 +24,9 @@ class EventController extends Controller
         $events = Event::where('published', true)
             ->get()
             ->map(function ($event) {
+                $imageUrl = $event->image
+                ? $workerBaseUrl . '/' . $event->image
+                : null;
                 return [
                     'id' => $event->id,
                     'title' => $event->title,
@@ -33,7 +36,7 @@ class EventController extends Controller
                     'extendedProps' => [
                         'description' => $event->description,
                         'location' => $event->location,
-                        'image' => $event->image,
+                        'image' => $event->$imageUrl,
                         'important' => $event->important,
                     ],
                 ];
@@ -75,7 +78,14 @@ class EventController extends Controller
     }
 
     // Show single event
-    public function show(Event $event) {
+    public function show(Event $event)
+    {
+        $workerBaseUrl = env('R2_WORKER_URL');
+
+        if ($event->image) {
+            $event->image = $workerBaseUrl . '/' . $event->image;
+        }
+
         return response()->json([
             'status' => true,
             'data' => $event

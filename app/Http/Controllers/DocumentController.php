@@ -31,12 +31,17 @@ class DocumentController extends Controller
             return response()->json(['message' => 'Document not found'], 404);
         }
 
+        $workerBaseUrl = env('R2_WORKER_URL');
+        $fileUrl = $document->file_path
+            ? $workerBaseUrl . '/' . $document->file_path
+            : null;
+
         return response()->json([
             'id' => $document->id,
             'name' => $document->name,
             'file_name' => $document->file_name,
             'layout' => $document->layout,
-            'file_url' => $document->file_path, // just path
+            'file_url' => $document->fileUrl, // just path
         ]);
     }
 

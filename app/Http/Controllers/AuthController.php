@@ -252,6 +252,11 @@ class AuthController extends Controller
         ]);
         $fullAddress = implode(', ', $addressParts);
 
+        $workerBaseUrl = env('R2_WORKER_URL');
+        $photoUrl = $user->url_photo
+            ? $workerBaseUrl . '/' . $user->url_photo
+            : null;
+
         return response()->json([
             'status' => 'success',
             'data' => [
