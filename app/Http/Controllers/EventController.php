@@ -21,22 +21,21 @@ class EventController extends Controller
     // Public API for calendar display
     public function publicIndex()
     {
+        $workerBaseUrl = 'https://bold-sunset-533d.clarkkentraguhos.workers.dev';
+
         $events = Event::where('published', true)
             ->get()
-            ->map(function ($event) {
-                $imageUrl = $event->image
-                ? $workerBaseUrl . '/' . $event->image
-                : null;
+            ->map(function ($event) use ($workerBaseUrl) { // <- pass into closure
                 return [
                     'id' => $event->id,
                     'title' => $event->title,
-                    'start' => $event->date . 'T' . $event->start_time, // ISO format
+                    'start' => $event->date . 'T' . $event->start_time,
                     'end' => $event->date . 'T' . ($event->end_time ?? $event->start_time),
                     'color' => $event->color ?? '#0047AB',
                     'extendedProps' => [
                         'description' => $event->description,
                         'location' => $event->location,
-                        'image' => $event->$imageUrl,
+                        'image' => $event->image ? $workerBaseUrl . '/' . $event->image : null,
                         'important' => $event->important,
                     ],
                 ];
@@ -78,14 +77,7 @@ class EventController extends Controller
     }
 
     // Show single event
-    public function show(Event $event)
-    {
-        $workerBaseUrl = env('R2_WORKER_URL');
-
-        if ($event->image) {
-            $event->image = $workerBaseUrl . '/' . $event->image;
-        }
-
+    public function show(Event $event) {
         return response()->json([
             'status' => true,
             'data' => $event
