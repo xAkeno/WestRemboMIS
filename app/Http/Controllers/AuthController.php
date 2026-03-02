@@ -169,7 +169,7 @@ class AuthController extends Controller
                 'status' => 'success',
                 'message' => 'Profile image uploaded successfully',
                 'data' => [
-                    'url_photo' => $url
+                    'url_photo' => $path
                 ]
             ], 200);
         }
@@ -251,9 +251,6 @@ class AuthController extends Controller
             $user->zone_purok,
         ]);
         $fullAddress = implode(', ', $addressParts);
-
-        $url = $user->url_photo ? asset('storage/' . $user->url_photo) : null;
-
 
         return response()->json([
             'status' => 'success',

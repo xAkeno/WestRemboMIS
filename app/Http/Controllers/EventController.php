@@ -33,7 +33,7 @@ class EventController extends Controller
                     'extendedProps' => [
                         'description' => $event->description,
                         'location' => $event->location,
-                        'image' => $event->image ? asset('storage/' . $event->image) : null,
+                        'image' => $event->image,
                         'important' => $event->important,
                     ],
                 ];
