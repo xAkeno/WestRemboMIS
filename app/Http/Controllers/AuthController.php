@@ -29,11 +29,12 @@ class AuthController extends Controller
             'id_url' => 'required|image|mimes:jpg,jpeg,png|max:2048', // 👈 added
         ]);
 
-        // ✅ Store image
         $imagePath = null;
 
         if ($request->hasFile('id_url')) {
-            $imagePath = $request->file('id_url')->store('ids', 'public');
+            $file = $request->file('id_url');
+            // store only the path, no full URL
+            $imagePath = Storage::disk('s3')->putFile('ids', $file);
         }
 
         // ✅ Create user
@@ -154,19 +155,12 @@ class AuthController extends Controller
 
         // Validate the uploaded file
         $request->validate([
-            'profileImage' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048', // max 2MB
+            'profileImage' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:3048', // max 2MB
         ]);
 
         if ($request->hasFile('profileImage')) {
             $file = $request->file('profileImage');
-
-            // Generate a unique filename
-            $filename = time() . '_' . $file->getClientOriginalName();
-
-            // Store the file in 'public/profile_images' directory
-            $path = $file->storeAs('profile_images', $filename, 'public');
-
-            // Save the URL or path in the database
+            $path = Storage::disk('s3')->putFile('profile_images', $file); // just the path
             $user->url_photo = $path;
             $user->save();
 
@@ -174,7 +168,7 @@ class AuthController extends Controller
                 'status' => 'success',
                 'message' => 'Profile image uploaded successfully',
                 'data' => [
-                    'url_photo' => $path
+                    'url_photo' => $url
                 ]
             ], 200);
         }

@@ -61,7 +61,7 @@ class EventController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $data['image'] = $request->file('image')->store('events', 'public');
+            $data['image'] = Storage::disk('s3')->putFile('events', $request->file('image'));
         }
 
         $event = Event::create($data);
@@ -98,8 +98,8 @@ class EventController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            if ($event->image) Storage::disk('public')->delete($event->image);
-            $data['image'] = $request->file('image')->store('events', 'public');
+            if ($event->image) Storage::disk('s3')->delete($event->image);
+            $data['image'] = Storage::disk('s3')->putFile('events', $request->file('image'));
         }
 
         $event->update($data);
@@ -109,7 +109,7 @@ class EventController extends Controller
 
     // Delete an event
     public function destroy(Event $event) {
-        if ($event->image) Storage::disk('public')->delete($event->image);
+        if ($event->image) Storage::disk('s3')->delete($event->image);
         $event->delete();
 
         return response()->json(['status' => true, 'message' => 'Event deleted']);

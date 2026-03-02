@@ -16,9 +16,7 @@ class DocumentController extends Controller
                 'name' => $doc->name,
                 'file_name' => $doc->file_name,
                 'layout' => $doc->layout,
-                'file_url' => $doc->file_path
-                    ? url('storage/' . str_replace('public/', '', $doc->file_path))
-                    : null,
+                'file_url' => $doc->file_path,
             ];
         });
 
@@ -46,8 +44,8 @@ class DocumentController extends Controller
             'name' => $document->name,
             'file_name' => $document->file_name,
             'layout' => $document->layout,
-            'file_path' => $document->file_path,
-            'file_url' => url('/documents/' . $document->file_name), // URL for frontend to fetch PDF
+            // 'file_path' => $document->file_path,
+            'file_url' => $document->file_path,
         ]);
     }
 
@@ -65,7 +63,8 @@ class DocumentController extends Controller
         ]);
 
         $file = $request->file('file');
-        $path = $file->store('public/documents');
+        // store only the path in S3
+        $path = Storage::disk('s3')->putFile('documents', $file);
 
         $document = Document::create([
             'name' => $request->name,
@@ -104,12 +103,12 @@ class DocumentController extends Controller
             'layout' => 'nullable|json',
         ]);
 
-        if ($document->file_path && Storage::exists($document->file_path)) {
-            Storage::delete($document->file_path);
+        if ($document->file_path && Storage::disk('s3')->exists($document->file_path)) {
+            Storage::disk('s3')->delete($document->file_path);
         }
 
         $file = $request->file('file');
-        $path = $file->store('public/documents');
+        $path = Storage::disk('s3')->putFile('documents', $file);
 
         $document->update([
             'file_path' => $path,
