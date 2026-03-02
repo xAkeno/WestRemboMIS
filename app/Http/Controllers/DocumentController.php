@@ -101,4 +101,20 @@ class DocumentController extends Controller
             'file_url' => $path ? $workerBaseUrl . '/' . $path : null,
         ]);
     }
+
+    public function updateLayout(Request $request, $id)
+    {
+        $request->validate([
+            'layout' => 'required|array'
+        ]);
+
+        $document = Document::findOrFail($id);
+        $document->layout = $request->layout;
+        $document->save();
+
+        return response()->json([
+            'message' => 'Layout updated successfully',
+            'layout' => $document->layout
+        ]);
+    }
 }
