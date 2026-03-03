@@ -33,19 +33,22 @@ class OfficialController extends Controller
         ]);
 
         $imagePath = null;
+
         if ($request->hasFile('profile_image')) {
-            $file = $request->file('profile_image');
-            $imagePath = Storage::disk('s3')->putFile('officials', $file); // 👈 S3 upload
+            $imagePath = Storage::disk('s3')
+                ->putFile('events', $request->file('profile_image'));
+            // example result:
+            // events/ivWEqWRUEMNGAnABnlBM1iIn5GKKoBMPdHSMjEse.jpg
         }
 
         $official = Official::create([
-            'profile_image' => $imagePath,
-            'full_name' => $request->full_name,
-            'position' => $request->position,
+            'profile_image'  => $imagePath,
+            'full_name'      => $request->full_name,
+            'position'       => $request->position,
             'committee_role' => $request->committee_role,
-            'term' => $request->term,
-            'display_order' => $request->display_order ?? 0,
-            'visible' => $request->boolean('visible', false),
+            'term'           => $request->term,
+            'display_order'  => $request->display_order ?? 0,
+            'visible'        => $request->boolean('visible', false),
         ]);
 
         return response()->json([
@@ -71,17 +74,24 @@ class OfficialController extends Controller
         ]);
 
         if ($request->hasFile('profile_image')) {
-            // Delete old image from S3
+
+            // delete old image if exists
             if ($official->profile_image) {
                 Storage::disk('s3')->delete($official->profile_image);
             }
-            $official->profile_image = Storage::disk('s3')->putFile('officials', $request->file('profile_image'));
+
+            $official->profile_image = Storage::disk('s3')
+                ->putFile('events', $request->file('profile_image'));
         }
 
-        $official->update(array_merge(
-            $request->except('profile_image'),
-            ['visible' => $request->boolean('visible', $official->visible)]
-        ));
+        $official->update([
+            'full_name'      => $request->full_name,
+            'position'       => $request->position,
+            'committee_role' => $request->committee_role,
+            'term'           => $request->term,
+            'display_order'  => $request->display_order ?? $official->display_order,
+            'visible'        => $request->boolean('visible', $official->visible),
+        ]);
 
         return response()->json([
             'status' => 'success',
