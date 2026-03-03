@@ -18,6 +18,7 @@ use App\Http\Controllers\StreetController;
 use App\Http\Controllers\EventController;
 use App\Http\Controllers\MyAllRequestsController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\OfficialController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
