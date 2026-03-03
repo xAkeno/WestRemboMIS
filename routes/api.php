@@ -38,6 +38,8 @@ Route::apiResource('events', EventController::class);
 
 Route::get('/public-events', [EventController::class, 'publicIndex']);
 Route::post('/contacts', [ContactController::class, 'submit']);
+Route::get('/officials', [OfficialController::class, 'index']); // List all officials
+Route::get('/officials/{id}', [OfficialController::class, 'show']);
  // Email verification routes
 Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
     $request->fulfill();
@@ -118,6 +120,10 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
 
     Route::get('/latest-activities', [LatestDashboard::class, 'latestActivity']);
     Route::post('/kiosk/search', [KioskController::class, 'search']);
+
+    Route::post('/officials', [OfficialController::class, 'store']);     
+    Route::put('/officials/{id}', [OfficialController::class, 'update']); 
+    Route::delete('/officials/{id}', [OfficialController::class, 'destroy']);
 
 
 
