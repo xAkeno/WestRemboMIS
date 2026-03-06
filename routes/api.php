@@ -86,6 +86,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::patch('/contacts/{id}/status', [ContactController::class, 'updateStatus']);
     Route::post('/contacts/{id}/reply', [ContactController::class, 'reply']);
 
+
     // Ticket system endpoints
     Route::post('/tickets', [\App\Http\Controllers\TicketController::class, 'store']);
     Route::get('/tickets/pending', [\App\Http\Controllers\TicketController::class, 'pending']);
