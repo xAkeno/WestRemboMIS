@@ -20,6 +20,7 @@ use App\Http\Controllers\MyAllRequestsController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\OfficialController;
 use App\Http\Controllers\ServiceController;
+use App\Http\Controllers\ContactCmsController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -40,6 +41,7 @@ Route::apiResource('events', EventController::class);
 
 Route::get('/services', [ServiceController::class, 'index']);
 Route::get('/services/{service}', [ServiceController::class, 'show']);
+Route::get('/contact', [ContactCmsController::class, 'index']);
 
 Route::get('/public-events', [EventController::class, 'publicIndex']);
 Route::post('/contacts', [ContactController::class, 'submit']);
@@ -64,8 +66,6 @@ Route::middleware('verified')->get('/dashboard', function() {
 // Route::options('/*', function () {
 //     return response()->json([], 200);
 // });
-
-Route::get('/contact', [ContactCmsController::class, 'index']);
 
 // All routes - no authentication required
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
