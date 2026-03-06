@@ -19,6 +19,7 @@ use App\Http\Controllers\EventController;
 use App\Http\Controllers\MyAllRequestsController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\OfficialController;
+use App\Http\Controllers\ServiceController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -36,6 +37,9 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::apiResource('streets', StreetController::class);
 
 Route::apiResource('events', EventController::class);
+
+Route::get('/services', [ServiceController::class, 'index']);
+Route::get('/services/{service}', [ServiceController::class, 'show']);
 
 Route::get('/public-events', [EventController::class, 'publicIndex']);
 Route::post('/contacts', [ContactController::class, 'submit']);
@@ -147,6 +151,12 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::post('/documents', [DocumentController::class, 'store']);
     Route::get('/documents/single/{id}', [DocumentController::class, 'show']);
     Route::put('/documents/{id}/layout', [DocumentController::class, 'updateLayout']);
+
+    Route::post('/services', [ServiceController::class, 'store']);
+    Route::put('/services/{service}', [ServiceController::class, 'update']);
+    Route::patch('/services/{service}', [ServiceController::class, 'update']);
+    Route::delete('/services/{service}', [ServiceController::class, 'destroy']);
+
     // routes/web.php
     Route::get('/documents/{filename}', function ($filename) {
         $path = storage_path('app/public/documents/' . $filename);

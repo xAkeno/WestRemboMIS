@@ -7,6 +7,9 @@ php artisan storage:link || echo "Link already exists"
 echo "Running migrations..."
 php artisan migrate --force
 
+echo "Seeding default services..."
+php artisan db:seed --class=ServicesSeeder --force || echo "Seeder already run"
+
 echo "Clearing cache..."
 php artisan config:clear
 php artisan cache:clear
