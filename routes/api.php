@@ -65,6 +65,8 @@ Route::middleware('verified')->get('/dashboard', function() {
 //     return response()->json([], 200);
 // });
 
+Route::get('/contact', [ContactCmsController::class, 'index']);
+
 // All routes - no authentication required
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/getAllUser', [AuthController::class, 'index']);
@@ -129,6 +131,10 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::post('/officials', [OfficialController::class, 'store']);     
     Route::put('/officials/{id}', [OfficialController::class, 'update']); 
     Route::delete('/officials/{id}', [OfficialController::class, 'destroy']);
+
+    Route::post('/contact', [ContactCmsController::class, 'store']);
+    Route::put('/contact/{id}', [ContactCmsController::class, 'update']);
+    Route::delete('/contact/{id}', [ContactCmsController::class, 'destroy']);
 
 
 

@@ -10,6 +10,10 @@ php artisan migrate --force
 echo "Seeding default services..."
 php artisan db:seed --class=ServicesSeeder --force || echo "Seeder already run"
 
+echo "Seeding default contact info..."
+php artisan db:seed --class=ContactCmsSeeder --force || echo "ContactCmsSeeder already run"
+
+
 echo "Clearing cache..."
 php artisan config:clear
 php artisan cache:clear
