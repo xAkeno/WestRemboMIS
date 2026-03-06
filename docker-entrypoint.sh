@@ -8,7 +8,7 @@ echo "Running migrations..."
 php artisan migrate --force
 
 echo "Seeding default services..."
-php artisan db:seed --class=ServiceSeeder --force || echo "Seeder already run"
+php artisan db:seed --class=ServicesSeeder --force || echo "Seeder already run"
 
 echo "Seeding default contact info..."
 php artisan db:seed --class=ContactCmsSeeder --force || echo "ContactCmsSeeder already run"
