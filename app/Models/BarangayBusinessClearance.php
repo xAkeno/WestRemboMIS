@@ -29,7 +29,10 @@ class BarangayBusinessClearance extends Model
         'inspectionRemarks',
         'inspectedRemarks',
         'dateInspected',
-        'inspectedNote'
+        'inspectedNote',
+        'status',
+        'created_by',
+        'updated_by'
     ];
 
     protected $casts = [
@@ -38,8 +41,14 @@ class BarangayBusinessClearance extends Model
         'capital' => 'decimal:2',
     ];
 
-    // public function created_by(){
-    //     return $this->belongTo(User::class);
-    // }
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
 }
 

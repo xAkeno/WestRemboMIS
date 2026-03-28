@@ -15,6 +15,8 @@ return new class extends Migration
         Schema::create('barangay_clearances', function (Blueprint $table) {
             $table->id();
             $table->string('bcert_number')->nullable();
+            $table->unsignedBigInteger('requester_id')->nullable();
+            $table->string('requester_type')->nullable();            
             $table->date('issued_date')->nullable();
             $table->string('prefix')->nullable();
             $table->string('surname')->nullable();
@@ -38,6 +40,8 @@ return new class extends Migration
             $table->date('issued_on')->nullable();
             $table->string('or_no')->nullable();
             $table->string('remarks')->nullable();
+            $table->string('status', 50)->nullable()->default('ENCODED');
+
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
 
             $table->timestamps();

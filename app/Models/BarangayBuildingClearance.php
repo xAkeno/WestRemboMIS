@@ -8,10 +8,10 @@ use App\Models\User;
 class BarangayBuildingClearance extends Model
 {
     use HasFactory;
-
+    
     protected $fillable = [
         'bcert_number',
-        'issued_date',
+        'issuedDate',
         'prefix',
         'surname',
         'firstname',
@@ -27,14 +27,26 @@ class BarangayBuildingClearance extends Model
         'remarks',
         'punongBarangay',
         'forThePunongBarangay',
-        'barangayPosition'
+        'barangayPosition',
+        'status',
+        'created_by',
+        'updated_by'
     ];
+
+
 
     protected $casts = [
         'issued_date' => 'date',
     ];
-    // public function created_by(){
-    //     return $this->belongTo(User::class);
-    // }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
 }
 

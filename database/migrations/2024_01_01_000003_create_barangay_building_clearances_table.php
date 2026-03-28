@@ -16,6 +16,8 @@ return new class extends Migration
         Schema::create('barangay_building_clearances', function (Blueprint $table) {
             $table->id();
             $table->string('bcert_number')->nullable();
+            $table->unsignedBigInteger('requester_id')->nullable();
+            $table->string('requester_type')->nullable();
             $table->date('issuedDate')->nullable();
             $table->string('prefix')->nullable();
             $table->string('surname')->nullable();
@@ -34,7 +36,7 @@ return new class extends Migration
             $table->string('forThePunongBarangay')->nullable();
             $table->string('barangayPosition')->nullable();
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
-
+            $table->string('status', 50)->nullable()->default('ENCODED');
             $table->timestamps();
         });
     }

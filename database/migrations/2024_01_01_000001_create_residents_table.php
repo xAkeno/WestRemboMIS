@@ -10,13 +10,13 @@ return new class extends Migration
      * Run the migrations.
      */
 
-    protected $primaryKey = 'resident_id';
-    public $incrementing = false; 
-    protected $keyType = 'string';
     public function up(): void
     {
         Schema::create('residents', function (Blueprint $table) {
-            $table->string('resident_id')->primary();
+            $table->id();
+            $table->string('resident_id')->unique();
+            $table->unsignedBigInteger('requester_id')->nullable();
+            $table->string('requester_type')->nullable();
             $table->string('prefix')->nullable();
             $table->string('surname')->required();
             $table->string('first_name')->required();
@@ -50,6 +50,7 @@ return new class extends Migration
             $table->string('email_address')->nullable();
             $table->text('notes')->nullable();
             $table->string('photo')->nullable();
+            $table->string('status', 50)->nullable()->default('ENCODED');
             $table->timestamps();
         });
     }

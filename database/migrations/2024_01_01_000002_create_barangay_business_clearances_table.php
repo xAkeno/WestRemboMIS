@@ -14,6 +14,8 @@ return new class extends Migration
         Schema::create('barangay_business_clearances', function (Blueprint $table) {
             $table->id();
             $table->string('brgyBusinessNo')->nullalble();
+            $table->unsignedBigInteger('requester_id')->nullable();
+            $table->string('requester_type')->nullable();
             $table->date('issuedDate')->nullable();
             $table->string('prefix')->nullable();
             $table->string('surname')->nullable();
@@ -35,7 +37,7 @@ return new class extends Migration
             $table->date('dateInspected')->nullable();
             $table->text('inspectedNote')->nullable();
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
-
+            $table->string('status', 50)->nullable()->default('ENCODED');
             $table->timestamps();
         });
     }

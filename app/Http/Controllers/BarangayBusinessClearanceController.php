@@ -5,11 +5,15 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreBarangayBusinessClearanceRequest;
 use App\Http\Requests\UpdateBarangayBusinessClearanceRequest;
 use App\Models\BarangayBusinessClearance;
+use App\Services\TicketService;
+use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Ticket;
 
 class BarangayBusinessClearanceController extends Controller
 {
+    use ExtractsUserFromAuthToken;
     /**
      * Display a listing of the resource.
      */
@@ -22,10 +26,19 @@ class BarangayBusinessClearanceController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('surname', 'like', "%{$search}%")
-                ->orWhere('first_name', 'like', "%{$search}%")
-                ->orWhere('trans_number', 'like', "%{$search}%")
-                ->orWhere('bcert_number', 'like', "%{$search}%")
-                ->orWhere('business_name', 'like', "%{$search}%");
+                ->orWhere('firstname', 'like', "%{$search}%")
+                ->orWhere('middlename', 'like', "%{$search}%")
+                ->orWhere('brgyBusinessNo', 'like', "%{$search}%")
+                ->orWhere('businessName', 'like', "%{$search}%")
+                ->orWhere('businessType', 'like', "%{$search}%")
+                ->orWhere('capital', 'like', "%{$search}%")
+                ->orWhere('street', 'like', "%{$search}%")
+                ->orWhere('zone', 'like', "%{$search}%")
+                ->orWhere('inspectedBy', 'like', "%{$search}%")
+                ->orWhere('inspectionRemarks', 'like', "%{$search}%")
+                ->orWhere('inspectedRemarks', 'like', "%{$search}%")
+                // Search by combined full name
+                ->orWhereRaw("CONCAT(firstname, ' ', surname) LIKE ?", ["%{$search}%"]);
             });
         }
 
@@ -60,9 +73,9 @@ class BarangayBusinessClearanceController extends Controller
         }
 
         // Filter by status (commented out for now)
-        // if ($request->has('status')) {
-        //     $query->where('status', $request->status);
-        // }
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
 
         $perPage = $request->get('per_page', 15);
         $clearances = $query->orderBy('created_at', 'desc')->paginate($perPage);
@@ -77,32 +90,39 @@ class BarangayBusinessClearanceController extends Controller
     public function chartData(Request $request)
     {
         $filter = $request->filter_date ?? 'this_month';
+        $from = $request->from ?? null;
+        $to = $request->to ?? null;
         
         $query = BarangayBusinessClearance::query();
 
-        if ($filter === 'this_week') {
-            $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
-                ->selectRaw('DAYNAME(created_at) as period, COUNT(*) as count')
-                ->groupBy('period');
-        } elseif ($filter === 'this_month') {
-            $query->whereMonth('created_at', now()->month)
-                ->whereYear('created_at', now()->year)
-                ->selectRaw('DAY(created_at) as period, COUNT(*) as count')
-                ->groupBy('period');
-        } elseif ($filter === 'this_year') {
-            $query->whereYear('created_at', now()->year)
-                ->selectRaw('MONTHNAME(created_at) as period, COUNT(*) as count')
-                ->groupBy('period');
-        }
-
         // Custom from-to range
-        if ($request->has('from') && $request->has('to')) {
+        if ($from && $to) {
             $query->whereBetween('created_at', [
-                $request->from . ' 00:00:00',
-                $request->to . ' 23:59:59'
+                $from . ' 00:00:00',
+                $to . ' 23:59:59'
             ])
             ->selectRaw('DATE(created_at) as period, COUNT(*) as count')
-            ->groupBy('period');
+            ->groupBy('period')
+            ->orderBy('period');
+        } else {
+            // Predefined filters
+            if ($filter === 'week') {
+                $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
+                    ->selectRaw('DAYOFWEEK(created_at) as day_num, DAYNAME(created_at) as period, COUNT(*) as count')
+                    ->groupBy('day_num', 'period')
+                    ->orderBy('day_num');
+            } elseif ($filter === 'month') {
+                $query->whereMonth('created_at', now()->month)
+                    ->whereYear('created_at', now()->year)
+                    ->selectRaw('DAY(created_at) as period, COUNT(*) as count')
+                    ->groupBy('period')
+                    ->orderBy('period');
+            } elseif ($filter === 'year') {
+                $query->whereYear('created_at', now()->year)
+                    ->selectRaw('MONTH(created_at) as month_num, MONTHNAME(created_at) as period, COUNT(*) as count')
+                    ->groupBy('month_num', 'period')
+                    ->orderBy('month_num');
+            }
         }
 
         $data = $query->get();
@@ -112,6 +132,7 @@ class BarangayBusinessClearanceController extends Controller
             'data' => $data
         ]);
     }
+
 
 
 
@@ -137,14 +158,46 @@ class BarangayBusinessClearanceController extends Controller
         $data = $request->validated();
 
         $data['brgyBusinessNo'] = $newRecord;
+        $data["status"] = "ENCODED";
+        $data['created_by'] = $this->getUserIdFromAuthToken();
+        $data['updated_by'] = $this->getUserIdFromAuthToken();
 
 
         $clearance = BarangayBusinessClearance::create($data);
 
+        // Find pending ticket for this service type and attach the created service
+        $ticketQuery = \App\Models\Ticket::where('service_type', 'Business Clearance')->whereNull('serviceable_id');
+        $found = null;
+        $userId = $this->getUserIdFromAuthToken();
+        if ($userId) {
+            $found = (clone $ticketQuery)->where('requester_id', $userId)->orderBy('created_at', 'desc')->first();
+        }
+        if (!$found) {
+            $found = $ticketQuery->orderBy('created_at', 'desc')->first();
+        }
+        if ($found) {
+            $found->serviceable_type = \App\Models\BarangayBusinessClearance::class;
+            $found->serviceable_id = $clearance->id;
+            $found->status = 'ENCODED';
+            $found->save();
+        }
+
+        // Create ticket linked to this clearance (kiosk flow: no requester)
+        $ticket = null;
+        // try {
+        //     $ticket = app(TicketService::class)->createTicketForService($clearance, 'Business Clearance', $data['priority'] ?? 'Normal', null);
+        //     \Log::info('Ticket created for Business Clearance', ['ticket_id' => $ticket?->id, 'ticket_number' => $ticket?->ticket_number]);
+        // } catch (\Throwable $e) {
+        //     \Log::error('Failed to create ticket for Business Clearance: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+        // }
+
         return response()->json([
             'status' => 'success',
             'message' => 'Business clearance created successfully',
-            'data' => $clearance,
+            'data' => [
+                'service' => $clearance,
+                'ticket' => $ticket,
+            ],
         ], 201);
     }
     public function latestRecord(){
@@ -183,29 +236,44 @@ class BarangayBusinessClearanceController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateBarangayBusinessClearanceRequest $request, BarangayBusinessClearance $barangayBusinessClearance)
-    {
-        $data = $request->validated();
+public function update(UpdateBarangayBusinessClearanceRequest $request, BarangayBusinessClearance $barangayBusinessClearance)
+{
+    $data = $request->validated();
 
-        // Handle attachment upload
-        if ($request->hasFile('attachment')) {
-            // Delete old attachment if exists
-            if ($barangayBusinessClearance->attachment) {
-                Storage::disk('public')->delete($barangayBusinessClearance->attachment);
-            }
-            $attachment = $request->file('attachment');
-            $attachmentPath = $attachment->store('clearances/business/attachments', 'public');
-            $data['attachment'] = $attachmentPath;
+    // Map frontend keys to database/model fields
+    $data['businessName'] = $data['establishment'] ?? $data['businessName'] ?? null;
+    $data['houseBlockLotNo'] = $data['houseBlockLot'] ?? $data['houseBlockLotNo'] ?? null;
+    $data['ext'] = $data['extension'] ?? $data['ext'] ?? null;
+
+    // Format dates to 'Y-m-d' for MySQL DATE
+    foreach (['issuedDate', 'dateOfInspection', 'dateInspected'] as $dateField) {
+        if (isset($data[$dateField]) && $data[$dateField]) {
+            $data[$dateField] = date('Y-m-d', strtotime($data[$dateField]));
         }
-
-        $barangayBusinessClearance->update($data);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Business clearance updated successfully',
-            'data' => $barangayBusinessClearance->fresh(),
-        ]);
     }
+
+    // Handle attachment upload
+    if ($request->hasFile('attachment')) {
+        if ($barangayBusinessClearance->attachment) {
+            Storage::disk('public')->delete($barangayBusinessClearance->attachment);
+        }
+        $attachment = $request->file('attachment');
+        $data['attachment'] = $attachment->store('clearances/business/attachments', 'public');
+    }
+
+    // Update only fillable fields
+    $fillable = $barangayBusinessClearance->getFillable();
+    $updateData = array_intersect_key($data, array_flip($fillable));
+
+    $barangayBusinessClearance->update($updateData);
+
+    return response()->json([
+        'status' => 'success',
+        'message' => 'Business clearance updated successfully',
+        'data' => $barangayBusinessClearance->fresh(),
+    ]);
+}
+
     public function total(Request $request){
         $total = BarangayBusinessClearance::count();
 
@@ -215,6 +283,32 @@ class BarangayBusinessClearanceController extends Controller
             'data' => $total,
         ]);
     }
+
+    public function updateStatusBusiness(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
+            ]);
+
+            $record = BarangayBusinessClearance::findOrFail($id);
+            $record->status = $validated['status'];
+            $record->save();
+
+            return response()->json([
+                "status" => "success",
+                "message" => "Business clearance status updated",
+                "data" => $record
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                "status" => "error",
+                "message" => "Error updating business clearance: " . $e->getMessage(),
+            ], 500);
+        }
+    }
+
 
     /**
      * Remove the specified resource from storage.

@@ -16,6 +16,8 @@ return new class extends Migration
         Schema::create('barangay_certificates', function (Blueprint $table) {
             $table->id();
             $table->string('bcert_number', 50);
+            $table->unsignedBigInteger('requester_id')->nullable();
+            $table->string('requester_type')->nullable();
             $table->date('issued_date');
             $table->string('prefix', 10)->nullable();
             $table->string('firstname', 100);
@@ -37,6 +39,8 @@ return new class extends Migration
             $table->text('purpose_details')->nullable();
             $table->string('punong_barangay', 100)->nullable();
             $table->string('for_the_punong_barangay', 100)->nullable();
+            $table->string('status', 50)->nullable()->default('ENCODED');
+
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
 
             $table->timestamps();

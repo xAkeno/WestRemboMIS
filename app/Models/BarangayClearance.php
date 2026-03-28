@@ -33,7 +33,10 @@ class BarangayClearance extends Model
         'issued_at',
         'issued_on',
         'or_no',
-        'remarks'
+        'remarks',
+        'status',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -41,8 +44,15 @@ class BarangayClearance extends Model
         'dob' => 'date',
         'issued_on' => 'date',
     ];
-    // public function created_by(){
-    //     return $this->belongTo(User::class);
-    // }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater()
+    {
+        return $this->belongsTo(User::class, 'updated_by');
+    }
 }
 

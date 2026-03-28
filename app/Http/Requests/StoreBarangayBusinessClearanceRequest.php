@@ -23,6 +23,7 @@ class StoreBarangayBusinessClearanceRequest extends FormRequest
     {
         return [
             'brgyBusinessNo' => 'nullable|string|max:50',
+            'requester_type' => 'required|string|max:50',
             'issuedDate' => 'nullable|date',
             'prefix' => 'nullable|string|max:10',
             'surname' => 'nullable|string|max:100',

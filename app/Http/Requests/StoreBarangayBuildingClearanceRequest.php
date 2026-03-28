@@ -23,6 +23,7 @@ class StoreBarangayBuildingClearanceRequest extends FormRequest
     {
         return [
             'bcert_number' => 'nullable|string|max:50',
+            'requester_type' => 'required|string|max:50',
             'issuedDate' => 'nullable|date',
             'prefix' => 'nullable|string|max:10',
             'surname' => 'required|string|max:100',
