@@ -21,6 +21,10 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\OfficialController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ContactCmsController;
+use App\Http\Controllers\DocumentUploadController;
+use App\Http\Controllers\AIController;
+use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\DocumentReplyController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -68,7 +72,19 @@ Route::middleware('verified')->get('/dashboard', function() {
 // });
 
 // All routes - no authentication required
+    Route::apiResource('barangay-certificates', BarangaCertificateController::class);
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
+
+    Route::get('/create-collection', function () {
+        $response = Http::put(env('VECTOR_DB').'/collections/chatbot', [
+            "vectors" => [
+                "size" => 768,
+                "distance" => "Cosine"
+            ]
+        ]);
+        return $response->json();
+    });
+    Route::get('/test-embedding', [AIController::class, 'embedTest']);
     Route::get('/getAllUser', [AuthController::class, 'index']);
     Route::get('/users/{id}', [AuthController::class, 'show']);
     Route::put('/users/{id}/permissions', [AuthController::class, 'updatePermissions']);
@@ -80,7 +96,19 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::apiResource('business-clearances', BarangayBusinessClearanceController::class);
     Route::apiResource('building-clearances', BarangayBuildingClearanceController::class);
     Route::apiResource('barangay-clearances', BarangayClearanceController::class);
-    Route::apiResource('barangay-certificates', BarangaCertificateController::class);
+
+    Route::get('/schedules', [ScheduleController::class, 'index']);
+    Route::post('/schedules', [ScheduleController::class, 'store']);
+    Route::get('/schedules/slots', [ScheduleController::class, 'getAvailableSlots']);
+    Route::get('/schedules/{document_number}', [ScheduleController::class, 'showByDocumentNumber']);
+    Route::put('/schedules/{document_number}/reschedule', [ScheduleController::class, 'reschedule']);
+    Route::prefix('documents')->group(function () {
+        Route::get('{type}/{id}/replies', [DocumentReplyController::class, 'index']);
+        Route::post('{type}/{id}/replies', [DocumentReplyController::class, 'store']);
+    });
+
+    // 🔥 NEW
+    Route::get('/documents/pending', [ScheduleController::class, 'getPendingDocuments']);
 
     Route::get('/contacts', [ContactController::class, 'index']);
     Route::patch('/contacts/{id}/status', [ContactController::class, 'updateStatus']);
@@ -139,11 +167,31 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
 
 
 
+
     Route::get('/check-shell', function() {
         if(function_exists('shell_exec')) {
             return "shell_exec is enabled";
         }
         return "shell_exec is NOT enabled";
+    });
+
+    Route::prefix('mydocuments')->name('documents.')->group(function () {
+ 
+        // List all uploads for the authenticated user (grouped by category)
+        Route::get('/',        [DocumentUploadController::class, 'index'])->name('index');
+ 
+        // Upload a file — POST field: type (string) + file (multipart)
+        Route::post('/upload', [DocumentUploadController::class, 'upload'])->name('upload');
+ 
+        // Get a single document with a fresh signed S3 URL
+        Route::get('/{id}',    [DocumentUploadController::class, 'show'])->name('show');
+ 
+        // Remove a document (deletes S3 object + soft-deletes DB record)
+        Route::delete('/{id}', [DocumentUploadController::class, 'destroy'])->name('destroy');
+ 
+        // Final submit — validates all required slots across all categories
+        Route::post('/submit', [DocumentUploadController::class, 'submit'])->name('submit');
+ 
     });
 
     Route::post('/backup/full', [BackupController::class, 'runFullBackup']);

@@ -152,7 +152,6 @@ class BarangayClearanceController extends Controller
         $data['created_by'] = $this->getUserIdFromAuthToken();
         $data['updated_by'] = $this->getUserIdFromAuthToken();
 
-
         // $data["created_by"] = auth()->id();
 
         // Update related ticket status to ENCODED if found

@@ -31,6 +31,7 @@
                 'purpose_details' => 'nullable|string|max:500',
                 'punong_barangay' => 'nullable|string|max:100',
                 'for_the_punong_barangay' => 'nullable|string|max:100',
+                'verification_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
             ];
         }
 
