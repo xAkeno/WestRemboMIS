@@ -50,6 +50,11 @@ class BarangayClearance extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function schedule()
+    {
+        return $this->hasOne(\App\Models\Schedule::class, 'document_number', 'bcert_number');
+    }
+
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');

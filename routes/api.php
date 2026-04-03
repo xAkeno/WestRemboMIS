@@ -25,6 +25,8 @@ use App\Http\Controllers\DocumentUploadController;
 use App\Http\Controllers\AIController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\DocumentReplyController;
+use App\Http\Controllers\OfficialReceiptController;
+use App\Http\Controllers\ServicePriceController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -165,7 +167,10 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::put('/contact/{id}', [ContactCmsController::class, 'update']);
     Route::delete('/contact/{id}', [ContactCmsController::class, 'destroy']);
 
+    Route::get('/generate-or', [OfficialReceiptController::class, 'generate']);
 
+    Route::get('/service-prices', [ServicePriceController::class, 'index']);
+    Route::put('/service-prices/{type}', [ServicePriceController::class, 'update']);
 
 
     Route::get('/check-shell', function() {

@@ -48,7 +48,8 @@ class Resident extends Model
         'photo',
         'status',
         'created_by',
-        'updated_by'
+        'updated_by',
+        'user_id'
     ];
 
     protected $casts = [
@@ -56,11 +57,27 @@ class Resident extends Model
         'date_of_birth' => 'date'
     ];
 
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
+   public function schedules()
+    {
+        return $this->hasManyThrough(
+            \App\Models\Schedule::class,
+            \App\Models\User::class,
+            'id',       // users.id
+            'user_id',  // schedules.user_id    
+            'user_id',  // residents.user_id
+            'id'        // users.id
+        );
+    }
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');

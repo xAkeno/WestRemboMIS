@@ -18,10 +18,10 @@ class BarangayClearanceController extends Controller
      */
     public function index(Request $request)
     {
-        $query = BarangayClearance::query();
+        $query = BarangayClearance::with('schedule');
 
-        // Search functionality
-        if ($request->has('search') && $request->search !== null) {
+        // 🔍 Search
+        if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('surname', 'like', "%{$search}%")
@@ -30,46 +30,79 @@ class BarangayClearanceController extends Controller
             });
         }
 
-        // Filter by zone
-        if ($request->has('zone') && $request->zone !== null) {
+        // 📍 Zone
+        if ($request->filled('zone')) {
             $query->where('zone', $request->zone);
         }
 
-        // Filter by status (Pending, Released, etc.) - currently commented
-        
-        if ($request->has('status')) {
+        // 📍 Street
+        if ($request->filled('street')) {
+            $query->where('street', $request->street);
+        }
+
+        // 📍 Purpose
+        if ($request->filled('purpose')) {
+            $query->where('purpose', $request->purpose);
+        }
+
+        // 📍 Status
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
-        
 
-        // Filter by predefined periods: week, month, year
-        if ($request->has('filter_date') && $request->filter_date !== null) {
-            $filter = $request->filter_date;
+        // 📅 Predefined date filters
+        if ($request->filled('filter_date')) {
+            switch ($request->filter_date) {
+                case 'this_week':
+                    $query->whereBetween('created_at', [
+                        now()->startOfWeek(),
+                        now()->endOfWeek()
+                    ]);
+                    break;
 
-            if ($filter === 'this_week') {
-                $query->whereBetween('created_at', [
-                    now()->startOfWeek(), // adjust start day if needed
-                    now()->endOfWeek()
-                ]);
-            } elseif ($filter === 'this_month') {
-                $query->whereMonth('created_at', now()->month)
-                    ->whereYear('created_at', now()->year);
-            } elseif ($filter === 'this_year') {
-                $query->whereYear('created_at', now()->year);
+                case 'this_month':
+                    $query->whereMonth('created_at', now()->month)
+                        ->whereYear('created_at', now()->year);
+                    break;
+
+                case 'this_year':
+                    $query->whereYear('created_at', now()->year);
+                    break;
             }
         }
 
-        // Filter by custom date range
-        if ($request->has('from') && $request->has('to') && $request->from !== null && $request->to !== null) {
+        // 📅 Custom date range
+        if ($request->filled('from') && $request->filled('to')) {
             $query->whereBetween('created_at', [
                 $request->from . ' 00:00:00',
                 $request->to . ' 23:59:59'
             ]);
         }
 
-        // Pagination
-        $perPage = $request->get('per_page', 15);
-        $clearances = $query->orderBy('created_at', 'desc')->paginate($perPage);
+        // 📅 Schedule filter (example - adjust column if needed)
+        if ($request->filled('schedule_filter')) {
+            $query->whereHas('schedule', function ($q) use ($request) {
+                $q->where('schedule_date', $request->schedule_filter);
+                // OR use schedule_time depending on your filter
+            });
+        }
+
+        // 🔽 Sorting
+        $sortField = $request->get('sortField', 'created_at');
+        $sortDirection = $request->get('sortDirection', 'desc');
+
+        $allowedSorts = ['created_at', 'surname', 'first_name', 'status'];
+
+        if (!in_array($sortField, $allowedSorts)) {
+            $sortField = 'created_at';
+        }
+
+        $query->orderBy($sortField, $sortDirection);
+
+        // 📄 Pagination (FIXED)
+        $perPage = $request->get('pageSize', 15);
+
+        $clearances = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',

@@ -19,50 +19,61 @@ class BarangayBuildingClearanceController extends Controller
      */
     public function index(Request $request)
     {
-        $query = BarangayBuildingClearance::query();
+        $query = BarangayBuildingClearance::with([
+            'schedule:id,document_number,schedule_date,schedule_time'
+        ]);
 
-        // Search functionality
+        // 🔍 Search
         if ($request->filled('search')) {
             $search = $request->search;
 
             $query->where(function ($q) use ($search) {
                 $q->where('surname', 'like', "%{$search}%")
-                    ->orWhere('first_name', 'like', "%{$search}%")
-                    ->orWhere('middle_name', 'like', "%{$search}%")
-                    ->orWhere('bcert_number', 'like', "%{$search}%")
-                    ->orWhere('house_block_lot_no', 'like', "%{$search}%")
-                    ->orWhere('street', 'like', "%{$search}%")
-                    ->orWhere('zone', 'like', "%{$search}%")
-                    ->orWhere('purpose', 'like', "%{$search}%")
-                    ->orWhere('or_no', 'like', "%{$search}%")
-                    ->orWhere('remarks', 'like', "%{$search}%")
-                    ->orWhereRaw("CONCAT(first_name, ' ', surname) LIKE ?", ["%{$search}%"]);
+                ->orWhere('first_name', 'like', "%{$search}%")
+                ->orWhere('middle_name', 'like', "%{$search}%")
+                ->orWhere('bcert_number', 'like', "%{$search}%")
+                ->orWhere('house_block_lot_no', 'like', "%{$search}%")
+                ->orWhere('street', 'like', "%{$search}%")
+                ->orWhere('zone', 'like', "%{$search}%")
+                ->orWhere('purpose', 'like', "%{$search}%")
+                ->orWhere('or_no', 'like', "%{$search}%")
+                ->orWhere('remarks', 'like', "%{$search}%")
+                ->orWhereRaw("CONCAT(first_name, ' ', surname) LIKE ?", ["%{$search}%"]);
             });
         }
 
-        // Filter by zone
+        // 📍 Zone
         if ($request->filled('zone')) {
             $query->where('zone', $request->zone);
         }
 
-        // Filter by date presets
-        if ($request->filled('filter_date')) {
-            $filter = $request->filter_date;
+        // 📍 Status
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
 
-            if ($filter === 'this_week') {
-                $query->whereBetween('created_at', [
-                    now()->startOfWeek(),
-                    now()->endOfWeek()
-                ]);
-            } elseif ($filter === 'this_month') {
-                $query->whereMonth('created_at', now()->month)
-                    ->whereYear('created_at', now()->year);
-            } elseif ($filter === 'this_year') {
-                $query->whereYear('created_at', now()->year);
+        // 📅 Predefined date filters
+        if ($request->filled('filter_date')) {
+            switch ($request->filter_date) {
+                case 'this_week':
+                    $query->whereBetween('created_at', [
+                        now()->startOfWeek(),
+                        now()->endOfWeek()
+                    ]);
+                    break;
+
+                case 'this_month':
+                    $query->whereMonth('created_at', now()->month)
+                        ->whereYear('created_at', now()->year);
+                    break;
+
+                case 'this_year':
+                    $query->whereYear('created_at', now()->year);
+                    break;
             }
         }
 
-        // Custom date range
+        // 📅 Custom date range
         if ($request->filled('from') && $request->filled('to')) {
             $query->whereBetween('created_at', [
                 $request->from . ' 00:00:00',
@@ -70,23 +81,48 @@ class BarangayBuildingClearanceController extends Controller
             ]);
         }
 
-        // Filter by status
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        // 📅 Schedule filter 🔥
+        if ($request->filled('schedule_filter')) {
+
+            if ($request->schedule_filter === 'has_schedule') {
+                $query->has('schedule');
+            }
+
+            elseif ($request->schedule_filter === 'no_schedule') {
+                $query->doesntHave('schedule');
+            }
+
+            else {
+                // treat as date filter
+                $query->whereHas('schedule', function ($q) use ($request) {
+                    $q->where('schedule_date', $request->schedule_filter);
+                });
+            }
         }
 
-        // Sorting (FIX for issuedDate issue)
-        $sortField = $request->get('sortField', 'created_at');
+        // 🔽 Sorting (SAFE)
+        $sortField = Str::snake($request->get('sortField', 'created_at'));
         $sortDirection = $request->get('sortDirection', 'desc');
 
-        // Convert camelCase to snake_case automatically
-        $sortField = Str::snake($sortField);
+        $allowedSorts = [
+            'created_at',
+            'surname',
+            'first_name',
+            'status',
+            'bcert_number',
+            'zone'
+        ];
 
+        if (!in_array($sortField, $allowedSorts)) {
+            $sortField = 'created_at';
+        }
+
+        $query->orderBy($sortField, $sortDirection);
+
+        // 📄 Pagination
         $perPage = $request->get('pageSize', 15);
 
-        $clearances = $query
-            ->orderBy($sortField, $sortDirection)
-            ->paginate($perPage);
+        $clearances = $query->paginate($perPage);
 
         return response()->json([
             'status' => 'success',

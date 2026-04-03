@@ -9,13 +9,16 @@ use App\Http\Requests\UpdateBarangayCertificateRequest;
 use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Support\Facades\Log;
 use App\Models\Ticket;
+use Illuminate\Support\Str;
 class BarangaCertificateController extends Controller
 {
     use ExtractsUserFromAuthToken;
     public function index(Request $request)
     {
         try {
-            $query = BarangayCertificate::query();
+            $query = BarangayCertificate::with([
+                'schedule:id,document_number,schedule_date,schedule_time'
+            ]);
 
             $columns = [
                 'bcert_number', 
@@ -32,55 +35,102 @@ class BarangaCertificateController extends Controller
                 'status'
             ];
 
-            // Search functionality
-            if ($request->has('search')) {
+            // 🔍 Search
+            if ($request->filled('search')) {
                 $search = $request->search;
+
                 $query->where(function ($q) use ($columns, $search) {
                     foreach ($columns as $col) {
                         $q->orWhere($col, 'like', "%{$search}%");
                     }
 
-                    $q->orWhereRaw("CONCAT_WS(' ',firstname, middle_name, surname) LIKE ?", ["%{$search}%"]);
+                    $q->orWhereRaw(
+                        "CONCAT_WS(' ', firstname, middle_name, surname) LIKE ?",
+                        ["%{$search}%"]
+                    );
                 });
             }
 
-            // Filter by zone
-            if ($request->has('zone')) {
+            // 📍 Zone
+            if ($request->filled('zone')) {
                 $query->where('zone', $request->zone);
             }
 
-            // Filter by date
-            if ($request->has('filter_date')) {
-                $filter = $request->filter_date;
+            // 📍 Status
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
 
-                if ($filter === 'this_week') {
-                    $query->whereBetween('created_at', [
-                        now()->startOfWeek(),
-                        now()->endOfWeek()
-                    ]);
-                } elseif ($filter === 'this_month') {
-                    $query->whereMonth('created_at', now()->month)
-                        ->whereYear('created_at', now()->year);
-                } elseif ($filter === 'this_year') {
-                    $query->whereYear('created_at', now()->year);
+            // 📅 Predefined date filters
+            if ($request->filled('filter_date')) {
+                switch ($request->filter_date) {
+                    case 'this_week':
+                        $query->whereBetween('created_at', [
+                            now()->startOfWeek(),
+                            now()->endOfWeek()
+                        ]);
+                        break;
+
+                    case 'this_month':
+                        $query->whereMonth('created_at', now()->month)
+                            ->whereYear('created_at', now()->year);
+                        break;
+
+                    case 'this_year':
+                        $query->whereYear('created_at', now()->year);
+                        break;
                 }
             }
 
-            // Filter by from-to dates
-            if ($request->has('from') && $request->has('to')) {
+            // 📅 Custom range
+            if ($request->filled('from') && $request->filled('to')) {
                 $query->whereBetween('created_at', [
                     $request->from . ' 00:00:00',
                     $request->to . ' 23:59:59'
                 ]);
             }
 
-            // Filter by status (commented out for now)
-            if ($request->has('status')) {
-                $query->where('status', $request->status);
+            // 📅 Schedule filter 🔥
+            if ($request->filled('schedule_filter')) {
+
+                if ($request->schedule_filter === 'has_schedule') {
+                    $query->has('schedule');
+                }
+
+                elseif ($request->schedule_filter === 'no_schedule') {
+                    $query->doesntHave('schedule');
+                }
+
+                else {
+                    $query->whereHas('schedule', function ($q) use ($request) {
+                        $q->where('schedule_date', $request->schedule_filter);
+                    });
+                }
             }
 
-            $per_page = $request->get("per_page", 15);
-            $data = $query->orderBy("created_at", "desc")->paginate($per_page);
+            // 🔽 Sorting (SAFE)
+            $sortField = Str::snake($request->get('sortField', 'created_at'));
+            $sortDirection = $request->get('sortDirection', 'desc');
+
+            $allowedSorts = [
+                'created_at',
+                'surname',
+                'firstname',
+                'bcert_number',
+                'zone',
+                'status'
+            ];
+
+            if (!in_array($sortField, $allowedSorts)) {
+                $sortField = 'created_at';
+            }
+
+            $query->orderBy($sortField, $sortDirection);
+
+            // 📄 Pagination (match frontend)
+            $perPage = $request->get("pageSize", 15);
+
+            $data = $query->paginate($perPage);
 
             return response()->json([
                 "status" => "success",
