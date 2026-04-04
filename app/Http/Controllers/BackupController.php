@@ -3,14 +3,12 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\File;
 use ZipArchive;
 use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
+
 class BackupController extends Controller
 {
     protected $backupPath;
@@ -21,7 +19,7 @@ class BackupController extends Controller
     }
 
     /* =========================
-       1. FULL BACKUP
+       1. FULL BACKUP (DB + Storage)
     ========================= */
     public function runFullBackup(Request $request)
     {
@@ -29,10 +27,7 @@ class BackupController extends Controller
         $zipFileName = "backup_full_{$timestamp}.zip";
         $zipFilePath = $this->backupPath . $zipFileName;
 
-        // Make sure backup folder exists
-        if (!file_exists($this->backupPath)) {
-            mkdir($this->backupPath, 0777, true);
-        }
+        if (!file_exists($this->backupPath)) mkdir($this->backupPath, 0777, true);
 
         // 1. Dump database
         $sqlFileName = "database_{$timestamp}.sql";
@@ -45,10 +40,10 @@ class BackupController extends Controller
             return response()->json(['success' => false, 'message' => 'Could not create ZIP']);
         }
 
-        // Add SQL
+        // Add SQL dump
         $zip->addFile($sqlFilePath, $sqlFileName);
 
-        // Add public storage
+        // Add public storage files (downloaded from Supabase bucket)
         $this->addStorageToZip($zip);
 
         $zip->close();
@@ -60,77 +55,26 @@ class BackupController extends Controller
     }
 
     /* =========================
-       2. DATABASE ONLY
-    ========================= */
-    public function runDatabaseBackup(Request $request)
-    {
-        $timestamp = date('Y_m_d_H_i_s');
-        $zipFileName = "backup_db_{$timestamp}.zip";
-        $zipFilePath = $this->backupPath . $zipFileName;
-
-        if (!file_exists($this->backupPath)) mkdir($this->backupPath, 0777, true);
-
-        // Dump database
-        $sqlFileName = "database_{$timestamp}.sql";
-        $sqlFilePath = $this->backupPath . $sqlFileName;
-        $this->dumpDatabase($sqlFilePath);
-
-        // Create ZIP and add only SQL
-        $zip = new ZipArchive();
-        if ($zip->open($zipFilePath, ZipArchive::CREATE) !== TRUE) {
-            return response()->json(['success' => false, 'message' => 'Could not create ZIP']);
-        }
-
-        $zip->addFile($sqlFilePath, $sqlFileName);
-        $zip->close();
-
-        unlink($sqlFilePath);
-
-        return response()->json(['success' => true, 'file' => $zipFileName]);
-    }
-
-    /* =========================
-       3. IMAGES ONLY
-    ========================= */
-    public function runImagesBackup(Request $request)
-    {
-        $timestamp = date('Y_m_d_H_i_s');
-        $zipFileName = "backup_images_{$timestamp}.zip";
-        $zipFilePath = $this->backupPath . $zipFileName;
-
-        if (!file_exists($this->backupPath)) mkdir($this->backupPath, 0777, true);
-
-        $zip = new ZipArchive();
-        if ($zip->open($zipFilePath, ZipArchive::CREATE) !== TRUE) {
-            return response()->json(['success' => false, 'message' => 'Could not create ZIP']);
-        }
-
-        // Add public storage only
-        $this->addStorageToZip($zip);
-
-        $zip->close();
-
-        return response()->json(['success' => true, 'file' => $zipFileName]);
-    }
-
-    /* =========================
-       HELPER: DUMP DATABASE
+       HELPER: DUMP DATABASE (PostgreSQL)
     ========================= */
     private function dumpDatabase($outputFile)
     {
-        $mysqlPath = 'C:/xampp/mysql/bin/mysqldump.exe';
-        $database = 'barangay_mis';
-        $user = 'root';
-        $password = ''; // your DB password
+        $host = env('DB_HOST'); // Supabase host
+        $port = env('DB_PORT', 5432);
+        $dbName = env('DB_DATABASE');
+        $user = env('DB_USERNAME');
+        $password = env('DB_PASSWORD');
 
-        $command = "\"$mysqlPath\" -h localhost -u $user";
-        if (!empty($password)) $command .= " -p$password";
-        $command .= " $database > \"$outputFile\"";
+        // Set password for pg_dump
+        putenv("PGPASSWORD=$password");
 
-        shell_exec($command);
+        // pg_dump command
+        $command = "pg_dump -h $host -p $port -U $user -d $dbName -F p -v -f \"$outputFile\"";
 
-        if (!file_exists($outputFile)) {
-            throw new \Exception("Database dump failed!");
+        exec($command, $output, $returnVar);
+
+        if ($returnVar !== 0 || !file_exists($outputFile)) {
+            throw new \Exception("Database dump failed! Command output: " . implode("\n", $output));
         }
     }
 
@@ -139,7 +83,10 @@ class BackupController extends Controller
     ========================= */
     private function addStorageToZip($zip)
     {
-        $storagePath = storage_path('app/public');
+        // Local storage folder (downloaded from Supabase bucket)
+        $storagePath = storage_path('app/public'); // you should sync your bucket to this folder
+        if (!file_exists($storagePath)) return;
+
         $files = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($storagePath),
             RecursiveIteratorIterator::LEAVES_ONLY
@@ -154,13 +101,14 @@ class BackupController extends Controller
             $zip->addFile($filePath, $relativePath);
         }
     }
+
+    /* =========================
+       2. LIST BACKUPS
+    ========================= */
     public function listBackups()
     {
         if (!file_exists($this->backupPath)) {
-            return response()->json([
-                'success' => true,
-                'backups' => [],
-            ]);
+            return response()->json(['success' => true, 'backups' => []]);
         }
 
         $files = File::files($this->backupPath);
@@ -175,26 +123,20 @@ class BackupController extends Controller
             ];
         }
 
-        return response()->json([
-            'success' => true,
-            'backups' => $backups,
-        ]);
+        return response()->json(['success' => true, 'backups' => $backups]);
     }
-    /**
-     * Download backup by file name
-     */
-    public function downloadBackup($id)
+
+    /* =========================
+       3. DOWNLOAD BACKUP
+    ========================= */
+    public function downloadBackup($fileName)
     {
-        $filePath = $this->backupPath . $id;
+        $filePath = $this->backupPath . $fileName;
 
         if (!file_exists($filePath)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Backup file not found!',
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'Backup file not found!'], 404);
         }
 
         return response()->download($filePath);
     }
-
 }

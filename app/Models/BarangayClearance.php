@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
+use App\Traits\NotifiesStatusChange;
 class BarangayClearance extends Model
 {
     use HasFactory;
-
+    use NotifiesStatusChange;
     protected $fillable = [
         'bcert_number',
         'issued_date',
@@ -55,9 +56,18 @@ class BarangayClearance extends Model
         return $this->hasOne(\App\Models\Schedule::class, 'document_number', 'bcert_number');
     }
 
+    public function getDocumentNumber()
+    {
+        return $this->bcert_number;
+    }
+
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 }
 

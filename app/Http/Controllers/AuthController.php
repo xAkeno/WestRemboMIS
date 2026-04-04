@@ -12,6 +12,7 @@ use App\Models\ActivityLogger;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\VerificationCodeMail;
 use Illuminate\Support\Facades\Storage;
+use App\Mail\AccountStatusMail;
 class AuthController extends Controller
 {
     /**
@@ -115,6 +116,31 @@ class AuthController extends Controller
         return response()->json(['data' => $user]);
     }
 
+    public function setApproval(Request $request, $id)
+    {
+        $request->validate([
+            'is_approved' => 'required|boolean',
+            'status' => 'required|string|in:active,inactive',
+        ]);
+
+        $user = User::findOrFail($id);
+
+        // Update approval and status
+        $user->is_approved = $request->is_approved;
+        $user->status = $request->status;
+        $user->save();
+
+        // Send email depending on approval
+        $emailStatus = $request->is_approved ? 'approved' : 'rejected';
+        Mail::to($user->email)->send(new \App\Mail\AccountStatusMail($user, $emailStatus));
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "User has been {$emailStatus} and notified via email.",
+            'data' => $user
+        ]);
+    }
+
     public function show($id)
     {
         $user = User::find($id);
@@ -126,19 +152,78 @@ class AuthController extends Controller
             ], 404);
         }
 
+        $workerBaseUrl = env('R2_WORKER_URL');
+
+        // Full address
+        $addressParts = array_filter([
+            $user->house_block_lot_no,
+            $user->street,
+            $user->zone_purok,
+        ]);
+        $fullAddress = implode(', ', $addressParts);
+
+        // Worker URLs
+        $photoUrl = $user->url_photo
+            ? $workerBaseUrl . '/' . $user->url_photo
+            : null;
+
+        $idUrl = $user->id_url
+            ? $workerBaseUrl . '/' . $user->id_url
+            : null;
+
         return response()->json([
             'status' => 'success',
             'data' => [
                 'id' => $user->id,
-                'name' => $user->name,
+                'prefix' => $user->prefix,
+                'first_name' => $user->first_name,
+                'middle_name' => $user->middle_name,
+                'surname' => $user->surname,
+                'extension_name' => $user->extension_name,
+                'nickname' => $user->nickname,
+
+                'sex' => $user->sex,
+                'marital_status' => $user->marital_status,
+                'name_of_spouse' => $user->name_of_spouse,
+                'date_of_birth' => $user->date_of_birth,
+
+                'url_photo' => $photoUrl, // ✅ fixed
+                'id_url' => $idUrl,       // ✅ IMPORTANT (your ID issue)
+
+                'place_of_birth' => $user->place_of_birth,
+                'religion' => $user->religion,
+
                 'email' => $user->email,
+                'contact_number' => $user->contact_number,
+
+                'address' => $fullAddress,
+
+                'house_owner' => $user->house_owner,
+                'relationship_to_owner' => $user->relationship_to_owner,
+
+                'resident_status' => $user->resident_status,
+                'period_of_residency' => $user->period_of_residency,
+
+                'voter_status' => $user->voter_status,
+                'precinct_no' => $user->precinct_no,
+
+                'employment_status' => $user->employment_status,
+                'occupation' => $user->occupation,
+                'position' => $user->position,
+
+                'pwd_status' => (bool) $user->pwd_status,
+                'height_cm' => $user->height_cm,
+                'weight_kg' => $user->weight_kg,
+                'blood_type' => $user->blood_type,
+                'complexion' => $user->complexion,
+
                 'username' => $user->username,
-                'role' => $user->role ?? 'Staff', // default role
+                'role' => $user->role ?? 'Staff',
                 'status' => $user->status,
-                'phone' => $user->phone ?? '',
-                'location' => $user->location ?? '',
-                'joinDate' => $user->created_at->format('F d, Y'),
-                'lastActive' => $user->updated_at->diffForHumans(),
+
+                'joinDate' => $user->created_at ? $user->created_at->format('F d, Y') : null,
+                'lastActive' => $user->updated_at ? $user->updated_at->diffForHumans() : null,
+
                 'permissions' => $user->permissions ? json_decode($user->permissions) : [],
             ]
         ], 200);

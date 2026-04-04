@@ -92,6 +92,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::put('/users/{id}/permissions', [AuthController::class, 'updatePermissions']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/details', [AuthController::class, 'details']);
+    Route::put('/users/{id}/approve', [AuthController::class, 'setApproval']);
     Route::post('/uploadProfileImage', [AuthController::class, 'uploadProfileImage']);
     Route::put('/updateProfile', [AuthController::class, 'updateProfile']);
     Route::apiResource('residents', ResidentController::class);

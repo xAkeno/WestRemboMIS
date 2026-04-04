@@ -23,10 +23,13 @@ class DocumentUploadController extends Controller
     private const MAX_SIZE_KB = 10240; // 10 MB
 
     // ── GET /api/documents ─────────────────────────────────────────────────────
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         try {
-            $userId = $this->getUserIdFromAuthToken();
+            // 🔥 PRIORITY: use requested user_id if provided
+            $userId = $request->input('user_id')
+                ? (int) $request->input('user_id')
+                : $this->getUserIdFromAuthToken();
 
             $uploads = DocumentUpload::where('user_id', $userId)
                 ->get()

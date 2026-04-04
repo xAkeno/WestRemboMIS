@@ -261,27 +261,22 @@ class BarangayClearanceController extends Controller
 
     public function updateStatusClearance(Request $request, $id)
     {
-        try {
-            $validated = $request->validate([
-                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
-            ]);
+        $validated = $request->validate([
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
+        ]);
 
-            $record = BarangayClearance::findOrFail($id);
-            $record->status = $validated['status'];
-            $record->save();
+        $record = BarangayClearance::findOrFail($id);
 
-            return response()->json([
-                "status" => "success",
-                "message" => "Barangay clearance status updated",
-                "data" => $record
-            ], 200);
+        // Force updated event to fire even if status is same
+        $record->status = $validated['status'];
+        $record->touch(); // updates updated_at timestamp
+        $record->save(); // triggers updated event
 
-        } catch (\Exception $e) {
-            return response()->json([
-                "status" => "error",
-                "message" => "Error updating barangay clearance: " . $e->getMessage(),
-            ], 500);
-        }
+        return response()->json([
+            "status" => "success",
+            "message" => "Barangay clearance status updated",
+            "data" => $record
+        ], 200);
     }
 
 

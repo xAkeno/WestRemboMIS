@@ -9,4 +9,4 @@
     <h1><?php echo e($code); ?></h1>
     <p>This code will expire in 10 minutes.</p>
 </body>
-</html><?php /**PATH C:\xampp\htdocs\Barangay MIS\resources\views/emails/verification.blade.php ENDPATH**/ ?>
+</html><?php /**PATH C:\Users\CK\Pictures\Barangay MIS\resources\views/emails/verification.blade.php ENDPATH**/ ?>

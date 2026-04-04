@@ -5,9 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
+use App\Traits\NotifiesStatusChange;
 class BarangayBusinessClearance extends Model
 {
     use HasFactory;
+    use NotifiesStatusChange;
     protected $fillable = [
         'brgy_business_no',
         'requester_type',
@@ -55,6 +57,14 @@ class BarangayBusinessClearance extends Model
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+    public function getDocumentNumber()
+    {
+        return $this->brgy_business_no;
     }
 }
 

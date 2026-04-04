@@ -24,6 +24,8 @@ return new class extends Migration
             $table->string('title');
             $table->text('message');
 
+            $table->morphs('notifiable');
+
             // Type of notification
             $table->enum('type', [
                 'status_update',
