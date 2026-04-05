@@ -32,7 +32,9 @@ class BarangayBuildingClearance extends Model
         'barangay_position',
         'status',
         'created_by',
-        'updated_by'
+        'updated_by',
+        'released_document_path',
+        'released_at',
     ];
 
 

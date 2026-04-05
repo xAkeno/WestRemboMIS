@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Models\Ticket;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
 class BarangayBuildingClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -19,6 +20,11 @@ class BarangayBuildingClearanceController extends Controller
      */
     public function index(Request $request)
     {
+        BarangayBuildingClearance::where('status', 'RELEASED')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', Carbon::now())
+            ->update(['status' => 'EXPIRED']);
+
         $query = BarangayBuildingClearance::with([
             'schedule:id,document_number,schedule_date,schedule_time'
         ]);
@@ -298,6 +304,12 @@ class BarangayBuildingClearanceController extends Controller
             ]);
 
             $record = BarangayBuildingClearance::findOrFail($id);
+
+            // ✅ Set issued + expiry
+            if ($validated['status'] === 'RELEASED' && !$record->issued_date) {
+                $record->issued_date = now();
+                $record->expires_at = now()->addMonths(12);
+            }
             $record->status = $validated['status'];
             $record->save();
 

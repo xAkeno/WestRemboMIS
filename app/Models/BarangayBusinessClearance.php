@@ -35,7 +35,9 @@ class BarangayBusinessClearance extends Model
         'inspected_note',
         'status',
         'created_by',
-        'updated_by'
+        'updated_by',
+        'released_document_path',
+        'released_at',
     ];
 
     protected $casts = [

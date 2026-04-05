@@ -18,10 +18,10 @@ class ScheduleController extends Controller
         $date = $request->date;
 
         $slotsConfig = [
-            'barangay_clearance' => ['08:00', '09:00', '10:00'],
-            'business_clearance' => ['10:00', '11:00', '13:00'],
-            'building_clearance' => ['13:00', '14:00', '15:00'],
-            'barangay_certificate' => ['09:00', '11:00', '14:00'],
+            'barangay_clearance'  => ['08:00', '09:00', '10:00'],
+            'business_clearance'  => ['10:00', '11:00', '13:00'],
+            'building_clearance'  => ['13:00', '14:00', '15:00'],
+            'barangay_certificate'=> ['09:00', '11:00', '14:00'],
         ];
 
         $slots = $slotsConfig[$type] ?? [];
@@ -35,32 +35,30 @@ class ScheduleController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'data' => $available
+            'data'   => $available,
         ]);
     }
 
-    // 🟢 Store schedule
+    // 🟢 Store schedule — also flips the document status to SCHEDULED
     public function store(Request $request): JsonResponse
     {
-        // ✅ Extract user ID from auth token / cookie
         $userId = $this->getUserIdFromAuthToken();
-
         $request->merge(['user_id' => $userId]);
 
         $request->validate([
-            'user_id' => 'required|exists:users,id',
-            'document_type' => 'required|string',
+            'user_id'         => 'required|exists:users,id',
+            'document_type'   => 'required|string',
             'document_number' => 'required|string',
-            'schedule_date' => 'required|date',
-            'schedule_time' => 'required',
+            'schedule_date'   => 'required|date',
+            'schedule_time'   => 'required',
         ]);
 
         // Prevent duplicate schedule for the same document
         $alreadyScheduled = Schedule::where('document_number', $request->document_number)->exists();
         if ($alreadyScheduled) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'This document already has a schedule.'
+                'status'  => 'error',
+                'message' => 'This document already has a schedule.',
             ], 422);
         }
 
@@ -72,16 +70,19 @@ class ScheduleController extends Controller
 
         if ($slotTaken) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Time slot already taken.'
+                'status'  => 'error',
+                'message' => 'Time slot already taken.',
             ], 422);
         }
 
         $schedule = Schedule::create($request->all());
 
+        // ✅ Update the related document's status to SCHEDULED
+        $this->updateDocumentStatus($request->document_type, $request->document_number, 'SCHEDULED');
+
         return response()->json([
             'status' => 'success',
-            'data' => $schedule
+            'data'   => $schedule,
         ]);
     }
 
@@ -99,31 +100,31 @@ class ScheduleController extends Controller
         $data = match ($type) {
             'barangay_clearance' => \App\Models\BarangayClearance::where('status', 'pending')->pluck('clearance_number'),
             'business_clearance' => \App\Models\BusinessClearance::where('status', 'pending')->pluck('clearance_number'),
-            default => collect([]),
+            default              => collect([]),
         };
 
         return response()->json(['data' => $data]);
     }
 
-    // 🟢 Get schedule by document number (e.g. BCLEAR-001)
+    // 🟢 Get schedule by document number
     public function showByDocumentNumber(string $documentNumber): JsonResponse
     {
         $schedule = Schedule::where('document_number', $documentNumber)->first();
 
         if (!$schedule) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'No schedule found for this document.'
+                'status'  => 'error',
+                'message' => 'No schedule found for this document.',
             ], 404);
         }
 
         return response()->json([
             'status' => 'success',
-            'data' => $schedule
+            'data'   => $schedule,
         ]);
     }
-    
-    // 🟢 Reschedule by document number (e.g. BCLEAR-001)
+
+    // 🟢 Reschedule by document number — also keeps status as SCHEDULED
     public function reschedule(Request $request, string $documentNumber): JsonResponse
     {
         $userId = $this->getUserIdFromAuthToken();
@@ -133,19 +134,17 @@ class ScheduleController extends Controller
             'schedule_time' => 'required',
         ]);
 
-        // Find existing schedule (secure: only owner can update)
-        $schedule = Schedule::where('document_number', $documentNumber)
-            ->where('user_id', $userId)
-            ->first();
+        // Find existing schedule — admins bypass the user_id check
+        $schedule = Schedule::where('document_number', $documentNumber)->first();
 
         if (!$schedule) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Schedule not found or unauthorized.'
+                'status'  => 'error',
+                'message' => 'Schedule not found.',
             ], 404);
         }
 
-        // ❌ Prevent slot conflict (ignore current record)
+        // Prevent slot conflict (ignore current record)
         $slotTaken = Schedule::where('document_type', $schedule->document_type)
             ->where('schedule_date', $request->schedule_date)
             ->where('schedule_time', $request->schedule_time)
@@ -154,21 +153,44 @@ class ScheduleController extends Controller
 
         if ($slotTaken) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Time slot already taken.'
+                'status'  => 'error',
+                'message' => 'Time slot already taken.',
             ], 422);
         }
 
-        // ✅ Update schedule
         $schedule->update([
             'schedule_date' => $request->schedule_date,
             'schedule_time' => $request->schedule_time,
         ]);
 
+        // ✅ Ensure status stays SCHEDULED after a reschedule too
+        $this->updateDocumentStatus($schedule->document_type, $documentNumber, 'SCHEDULED');
+
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Schedule updated successfully.',
-            'data' => $schedule
+            'data'    => $schedule,
         ]);
+    }
+
+    // ─── Private helper — maps document_type slug to its model and number column ──
+    private function updateDocumentStatus(string $documentType, string $documentNumber, string $status): void
+    {
+        // Map document_type slug → [ModelClass, number_column]
+        $map = [
+            'barangay_clearance'   => [\App\Models\BarangayClearance::class,  'bcert_number'],
+            'barangay_certificate' => [\App\Models\BarangayClearance::class,  'bcert_number'],
+            'business_clearance'   => [\App\Models\BusinessClearance::class,  'brgy_business_no'],
+            'building_clearance'   => [\App\Models\BuildingClearance::class,  'bcert_number'],
+        ];
+
+        if (!isset($map[$documentType])) {
+            return; // unknown type — skip silently
+        }
+
+        [$modelClass, $numberColumn] = $map[$documentType];
+
+        $modelClass::where($numberColumn, $documentNumber)
+            ->update(['status' => $status]);
     }
 }

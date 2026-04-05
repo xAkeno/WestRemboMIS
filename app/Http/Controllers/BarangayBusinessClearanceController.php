@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 class BarangayBusinessClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -19,6 +20,11 @@ class BarangayBusinessClearanceController extends Controller
      */
     public function index(Request $request)
     {
+        // ✅ Auto-expire
+        BarangayBusinessClearance::where('status', 'RELEASED')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', Carbon::now())
+            ->update(['status' => 'EXPIRED']);
         $query = BarangayBusinessClearance::with([
             'schedule:id,document_number,schedule_date,schedule_time'
         ]);
@@ -306,6 +312,12 @@ class BarangayBusinessClearanceController extends Controller
             ]);
 
             $record = BarangayBusinessClearance::findOrFail($id);
+
+            // ✅ Set issued + expiry
+            if ($validated['status'] === 'RELEASED' && !$record->issued_date) {
+                $record->issued_date = now();
+                $record->expires_at = now()->addYear(); // 🔥 business = 1 year (optional)
+            }
             $record->status = $validated['status'];
             $record->save();
 

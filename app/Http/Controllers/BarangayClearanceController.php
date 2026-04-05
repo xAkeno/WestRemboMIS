@@ -9,7 +9,7 @@ use App\Services\TicketService;
 use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Http\Request;
 use App\Models\Ticket;
-
+use Carbon\Carbon;
 class BarangayClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -18,6 +18,12 @@ class BarangayClearanceController extends Controller
      */
     public function index(Request $request)
     {
+        // ✅ Auto-expire documents
+        BarangayClearance::where('status', 'RELEASED')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', Carbon::now())
+            ->update(['status' => 'EXPIRED']);
+
         $query = BarangayClearance::with('schedule');
 
         // 🔍 Search
@@ -262,15 +268,20 @@ class BarangayClearanceController extends Controller
     public function updateStatusClearance(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED, SCHEDULED, EXPIRED',
         ]);
 
         $record = BarangayClearance::findOrFail($id);
 
-        // Force updated event to fire even if status is same
+        // ✅ If status becomes RELEASED → set issued + expiry
+        if ($validated['status'] === 'RELEASED') {
+            $record->issued_date = $record->issued_date ?? now(); // don't overwrite if exists
+            $record->expires_at = now()->addMonths(6);
+        }
+
         $record->status = $validated['status'];
-        $record->touch(); // updates updated_at timestamp
-        $record->save(); // triggers updated event
+        $record->touch();
+        $record->save();
 
         return response()->json([
             "status" => "success",

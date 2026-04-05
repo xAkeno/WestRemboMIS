@@ -10,12 +10,17 @@ use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Support\Facades\Log;
 use App\Models\Ticket;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
 class BarangaCertificateController extends Controller
 {
     use ExtractsUserFromAuthToken;
     public function index(Request $request)
     {
         try {
+            BarangayCertificate::where('status', 'RELEASED')
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<=', Carbon::now())
+                ->update(['status' => 'EXPIRED']);
             $query = BarangayCertificate::with([
                 'schedule:id,document_number,schedule_date,schedule_time'
             ]);
@@ -207,7 +212,7 @@ class BarangaCertificateController extends Controller
             $data["created_by"] = $this->getUserIdFromAuthToken();
             $data["updated_by"] = $this->getUserIdFromAuthToken();
             $data["status"] = "ENCODED";
-            $data["issued_date"] = now()->toDateString();
+            // $data["issued_date"] = now()->toDateString();
 
             $barangaCertificate = BarangayCertificate::create($data);
 
@@ -299,6 +304,11 @@ class BarangaCertificateController extends Controller
             ]);
 
             $record = BarangayCertificate::findOrFail($id);
+            // ✅ Set issued + expiry
+            if ($validated['status'] === 'RELEASED' && !$record->issued_date) {
+                $record->issued_date = now();
+                $record->expires_at = now()->addMonths(6);
+            }
             $record->status = $validated['status'];
             $record->save();
 

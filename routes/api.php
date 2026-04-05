@@ -27,6 +27,7 @@ use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\DocumentReplyController;
 use App\Http\Controllers\OfficialReceiptController;
 use App\Http\Controllers\ServicePriceController;
+use App\Http\Controllers\ReleaseDocumentController;
 // Public routes
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -99,6 +100,18 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::apiResource('business-clearances', BarangayBusinessClearanceController::class);
     Route::apiResource('building-clearances', BarangayBuildingClearanceController::class);
     Route::apiResource('barangay-clearances', BarangayClearanceController::class);
+
+    // Release a document: sets status=released, uploads PDF to S3
+    Route::post(
+        'documents/release/{documentType}/{id}',
+        [ReleaseDocumentController::class, 'release']
+    );
+ 
+    // Get a 15-min signed download URL for a released document
+    Route::get(
+        'documents/release/{documentType}/{id}/download',
+        [ReleaseDocumentController::class, 'download']
+    );
 
     Route::get('/schedules', [ScheduleController::class, 'index']);
     Route::post('/schedules', [ScheduleController::class, 'store']);
