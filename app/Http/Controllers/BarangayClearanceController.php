@@ -10,6 +10,7 @@ use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Http\Request;
 use App\Models\Ticket;
 use Carbon\Carbon;
+use App\Models\ActivityLogger;
 class BarangayClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -197,6 +198,12 @@ class BarangayClearanceController extends Controller
 
         $clearance = BarangayClearance::create($data);
 
+        activity_log(
+            'Barangay Clearance Created',
+            'create',
+            'Created #: ' . $clearance->bcert_number
+        );
+
         // Update the related ticket status to ENCODED using correct columns
         Ticket::query()
             ->where('serviceable_type', BarangayClearance::class)
@@ -258,6 +265,12 @@ class BarangayClearanceController extends Controller
         $data = $request->validated();
         $barangayClearance->update($data);
 
+        activity_log(
+            'Barangay Clearance Updated',
+            'update',
+            'Updated #: ' . $barangayClearance->bcert_number
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Barangay clearance updated successfully',
@@ -283,6 +296,12 @@ class BarangayClearanceController extends Controller
         $record->touch();
         $record->save();
 
+        activity_log(
+            'Barangay Clearance Status Updated',
+            'status_update',
+            'Changed to ' . $validated['status'] . ' (#: ' . $record->bcert_number . ')'
+        );
+
         return response()->json([
             "status" => "success",
             "message" => "Barangay clearance status updated",
@@ -297,6 +316,12 @@ class BarangayClearanceController extends Controller
     public function destroy(BarangayClearance $barangayClearance)
     {
         $barangayClearance->delete();
+
+        activity_log(
+            'Barangay Clearance Deleted',
+            'delete',
+            'Deleted #: ' . $deleted->bcert_number
+        );
 
         return response()->json([
             'status' => 'success',

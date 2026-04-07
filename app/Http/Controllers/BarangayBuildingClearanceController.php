@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Ticket;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use App\Models\ActivityLogger;
 class BarangayBuildingClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -216,6 +217,12 @@ class BarangayBuildingClearanceController extends Controller
 
         $clearance = BarangayBuildingClearance::create($data);
 
+        activity_log(
+            'Building Clearance Created',
+            'create',
+            'Created #: ' . $clearance->bcert_number
+        );
+
         // Find pending ticket for this service type and attach the created service
         $ticketQuery = \App\Models\Ticket::where('service_type', 'Building Clearance')->whereNull('serviceable_id');
         $found = null;
@@ -289,6 +296,12 @@ class BarangayBuildingClearanceController extends Controller
         
         $building_clearance->update($request->validated());
 
+        activity_log(
+            'Building Clearance Updated',
+            'update',
+            'Updated #: ' . $building_clearance->bcert_number
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Building clearance updated successfully',
@@ -300,7 +313,7 @@ class BarangayBuildingClearanceController extends Controller
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
+                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED, SCHEDULED, EXPIRED',
             ]);
 
             $record = BarangayBuildingClearance::findOrFail($id);
@@ -312,6 +325,12 @@ class BarangayBuildingClearanceController extends Controller
             }
             $record->status = $validated['status'];
             $record->save();
+
+            activity_log(
+                'Building Clearance Status Updated',
+                'status_update',
+                'Changed to ' . $validated['status'] . ' (#: ' . $record->bcert_number . ')'
+            );
 
             return response()->json([
                 "status" => "success",
@@ -334,6 +353,12 @@ class BarangayBuildingClearanceController extends Controller
     public function destroy(BarangayBuildingClearance $barangayBuildingClearance)
     {
         $barangayBuildingClearance->delete();
+
+        activity_log(
+            'Building Clearance Deleted',
+            'delete',
+            'Deleted #: ' . $deleted->bcert_number
+        );
 
         return response()->json([
             'status' => 'success',

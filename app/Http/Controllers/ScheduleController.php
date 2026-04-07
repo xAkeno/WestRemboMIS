@@ -6,7 +6,7 @@ use App\Models\Schedule;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Traits\ExtractsUserFromAuthToken;
-
+use App\Models\ActivityLogger;
 class ScheduleController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -77,6 +77,12 @@ class ScheduleController extends Controller
 
         $schedule = Schedule::create($request->all());
 
+        activity_log(
+            'Schedule Created',
+            'create',
+            "User #{$userId} created a schedule for document '{$request->document_number}' ({$request->document_type})"
+        );
+
         // ✅ Update the related document's status to SCHEDULED
         $this->updateDocumentStatus($request->document_type, $request->document_number, 'SCHEDULED');
 
@@ -98,8 +104,10 @@ class ScheduleController extends Controller
         $type = $request->document_type;
 
         $data = match ($type) {
-            'barangay_clearance' => \App\Models\BarangayClearance::where('status', 'pending')->pluck('clearance_number'),
-            'business_clearance' => \App\Models\BusinessClearance::where('status', 'pending')->pluck('clearance_number'),
+            'barangay_clearance' => \App\Models\BarangayClearance::where('status', 'pending')->pluck('bcert_number'),
+            'business_clearance' => \App\Models\BarangayBusinessClearance::where('status', 'pending')->pluck('brgy_business_no'),
+            'building_clearance' => \App\Models\BarangayBuildingClearance::where('status', 'pending')->pluck('bcert_number'),
+            'barangay_certificate' => \App\Models\BarangayCertificate::where('status', 'pending')->pluck('bcert_number'),
             default              => collect([]),
         };
 
@@ -166,6 +174,12 @@ class ScheduleController extends Controller
         // ✅ Ensure status stays SCHEDULED after a reschedule too
         $this->updateDocumentStatus($schedule->document_type, $documentNumber, 'SCHEDULED');
 
+        activity_log(
+            'Schedule Rescheduled',
+            'update',
+            "User #{$userId} rescheduled document '{$documentNumber}' to {$request->schedule_date} {$request->schedule_time}"
+        );
+
         return response()->json([
             'status'  => 'success',
             'message' => 'Schedule updated successfully.',
@@ -176,16 +190,18 @@ class ScheduleController extends Controller
     // ─── Private helper — maps document_type slug to its model and number column ──
     private function updateDocumentStatus(string $documentType, string $documentNumber, string $status): void
     {
-        // Map document_type slug → [ModelClass, number_column]
         $map = [
-            'barangay_clearance'   => [\App\Models\BarangayClearance::class,  'bcert_number'],
-            'barangay_certificate' => [\App\Models\BarangayClearance::class,  'bcert_number'],
-            'business_clearance'   => [\App\Models\BusinessClearance::class,  'brgy_business_no'],
-            'building_clearance'   => [\App\Models\BuildingClearance::class,  'bcert_number'],
+            'barangay_clearance'    => [\App\Models\BarangayClearance::class,         'bcert_number'],
+            'barangay_certificate'  => [\App\Models\BarangayCertificate::class,        'bcert_number'],
+            'business_clearance'    => [\App\Models\BarangayBusinessClearance::class,  'brgy_business_no'],
+            'building_clearance'    => [\App\Models\BarangayBuildingClearance::class,  'bcert_number'],
+            'resident'              => [\App\Models\Resident::class,                   'resident_id'],
+            'resident_registration' => [\App\Models\Resident::class,                   'resident_id'],
         ];
 
         if (!isset($map[$documentType])) {
-            return; // unknown type — skip silently
+            \Log::warning("ScheduleController: unknown document_type '{$documentType}', status update skipped.");
+            return;
         }
 
         [$modelClass, $numberColumn] = $map[$documentType];

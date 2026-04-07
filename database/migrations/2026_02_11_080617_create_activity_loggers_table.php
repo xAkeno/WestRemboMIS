@@ -23,8 +23,9 @@ return new class extends Migration
                 'new_document',
                 'update_document',
                 'delete_document',
+                'create',      // <-- add this
                 'other'
-            ])->default('other');
+            ])->default('other')->change();
             $table->text('description')->nullable();
             $table->string('ip_address')->nullable();
             $table->timestamps();

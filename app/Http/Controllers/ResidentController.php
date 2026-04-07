@@ -10,7 +10,7 @@ use App\Traits\ExtractsUserFromAuthToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Ticket;
-
+use App\Models\ActivityLogger;
 class ResidentController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -135,12 +135,18 @@ public function chartData(Request $request)
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
+                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED, SCHEDULED, EXPIRED',
             ]);
 
             $record = Resident::findOrFail($id);
             $record->status = $validated['status'];
             $record->save();
+
+            activity_log(
+                'Resident Status Updated',
+                'status_update',
+                'Resident #' . $record->id . ' status changed to ' . $validated['status']
+            );
 
             return response()->json([
                 "status" => "success",
@@ -201,6 +207,12 @@ public function chartData(Request $request)
         $data['updated_by'] = $userId;
 
         $resident = Resident::create($data);
+
+        activity_log(
+            'Resident Created',
+            'create',
+            'Resident #' . $resident->id . ' created by user #' . $userId
+        );
 
         // Find a matching pending ticket created earlier (kiosk or requester)
         $ticket = \App\Models\Ticket::where('service_type', 'Resident Registration')
@@ -268,6 +280,12 @@ public function chartData(Request $request)
 
         $resident->update($data);
 
+        activity_log(
+            'Resident Updated',
+            'update',
+            'Resident #' . $resident->id . ' updated'
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Resident updated successfully',
@@ -286,6 +304,12 @@ public function chartData(Request $request)
         }
 
         $resident->delete();
+
+        activity_log(
+            'Resident Deleted',
+            'delete',
+            'Resident #' . $resident->id . ' deleted'
+        );
 
         return response()->json([
             'status' => 'success',

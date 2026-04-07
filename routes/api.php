@@ -29,7 +29,7 @@ use App\Http\Controllers\OfficialReceiptController;
 use App\Http\Controllers\ServicePriceController;
 use App\Http\Controllers\ReleaseDocumentController;
 // Public routes
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'supabaseLogin']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);

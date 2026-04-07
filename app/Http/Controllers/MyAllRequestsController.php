@@ -9,7 +9,7 @@ use App\Models\BarangayBusinessClearance;
 use App\Models\BarangayCertificate;
 use App\Models\BarangayClearance;
 use App\Models\BarangayBuildingClearance;
-
+use App\Models\Resident;
 class MyAllRequestsController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -31,7 +31,7 @@ class MyAllRequestsController extends Controller
             $certificate = BarangayCertificate::where('created_by', $userId)->get();
             $clearance = BarangayClearance::where('created_by', $userId)->get();
             $building = BarangayBuildingClearance::where('created_by', $userId)->get();
-
+            $resident = Resident::where('created_by', $userId)->get();
             return response()->json([
                 'status' => 'success',
                 'data' => [
@@ -39,6 +39,7 @@ class MyAllRequestsController extends Controller
                     'certificate' => $certificate,
                     'clearance' => $clearance,
                     'building' => $building,
+                    'resident' => $resident
                 ]
             ]);
 

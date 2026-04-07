@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Models\Ticket;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Models\ActivityLogger;
 class BarangayBusinessClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -205,6 +206,12 @@ class BarangayBusinessClearanceController extends Controller
 
         $clearance = BarangayBusinessClearance::create($data);
 
+        activity_log(
+            'Business Clearance Created',
+            'create',
+            'Created #: ' . $clearance->brgy_business_no
+        );
+
         // Find pending ticket for this service type and attach the created service
         $ticketQuery = \App\Models\Ticket::where('service_type', 'Business Clearance')->whereNull('serviceable_id');
         $found = null;
@@ -287,6 +294,12 @@ class BarangayBusinessClearanceController extends Controller
 
         $barangayBusinessClearance->update($data);
 
+        activity_log(
+            'Business Clearance Updated',
+            'update',
+            'Updated #: ' . $barangayBusinessClearance->brgy_business_no
+        );
+
         return response()->json([
             'status' => 'success',
             'message' => 'Business clearance updated successfully',
@@ -308,7 +321,7 @@ class BarangayBusinessClearanceController extends Controller
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
+                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED, SCHEDULED, EXPIRED',
             ]);
 
             $record = BarangayBusinessClearance::findOrFail($id);
@@ -320,6 +333,12 @@ class BarangayBusinessClearanceController extends Controller
             }
             $record->status = $validated['status'];
             $record->save();
+
+            activity_log(
+                'Business Clearance Status Updated',
+                'status_update',
+                'Changed to ' . $validated['status'] . ' (#: ' . $record->brgy_business_no . ')'
+            );
 
             return response()->json([
                 "status" => "success",
@@ -347,6 +366,12 @@ class BarangayBusinessClearanceController extends Controller
         }
 
         $barangayBusinessClearance->delete();
+
+        activity_log(
+            'Business Clearance Deleted',
+            'delete',
+            'Deleted #: ' . $deleted->brgy_business_no
+        );
 
         return response()->json([
             'status' => 'success',

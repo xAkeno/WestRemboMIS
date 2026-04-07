@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\Ticket;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use App\Models\ActivityLogger;
 class BarangaCertificateController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -215,7 +216,12 @@ class BarangaCertificateController extends Controller
             // $data["issued_date"] = now()->toDateString();
 
             $barangaCertificate = BarangayCertificate::create($data);
-
+            
+            activity_log(
+                'Barangay Certificate Created',
+                'create',
+                'Created BCERT #: ' . $barangaCertificate->bcert_number
+            );
             // Find pending ticket for this service type and attach the created service
             $ticketQuery = \App\Models\Ticket::where('service_type', 'Barangay Certificate')->whereNull('serviceable_id');
             $found = null;
@@ -282,6 +288,12 @@ class BarangaCertificateController extends Controller
 
             $barangayCertificate->update($data);
 
+            activity_log(
+                'Barangay Certificate Updated',
+                'update',
+                'Updated BCERT #: ' . $barangayCertificate->bcert_number
+            );
+
             return response()->json([
                 "status" => "success",
                 "message" => "Successfully updated the certificate",
@@ -300,7 +312,7 @@ class BarangaCertificateController extends Controller
     {
         try {
             $validated = $request->validate([
-                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED'
+                'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED, SCHEDULED, EXPIRED',
             ]);
 
             $record = BarangayCertificate::findOrFail($id);
@@ -311,6 +323,12 @@ class BarangaCertificateController extends Controller
             }
             $record->status = $validated['status'];
             $record->save();
+
+            activity_log(
+                'Barangay Certificate Status Updated',
+                'status_update',
+                'Changed to ' . $validated['status'] . ' (BCERT #: ' . $record->bcert_number . ')'
+            );
 
             return response()->json([
                 "status" => "success",
@@ -330,6 +348,11 @@ class BarangaCertificateController extends Controller
     public function destroy(BarangayCertificate $request){
         try{
             $request->delete();
+            activity_log(
+                'Barangay Certificate Deleted',
+                'delete',
+                'Deleted BCERT #: ' . $deleted->bcert_number
+            );
             return response()->json([
                 "status" => "success",
                 "message" => "Sucessfullt updated the certificate"

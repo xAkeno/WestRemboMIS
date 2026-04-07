@@ -17,7 +17,7 @@ return new class extends Migration
             $table->id();
             $table->string('bcert_number', 50);
             $table->string('requester_type')->nullable();
-            $table->date('issued_date');
+            $table->date('issued_date')->nullable();
             $table->string('prefix', 10)->nullable();
             $table->string('firstname', 100);
             $table->string('middle_name', 100)->nullable();

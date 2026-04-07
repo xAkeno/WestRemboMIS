@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\File;
 use ZipArchive;
 use RecursiveIteratorIterator;
 use RecursiveDirectoryIterator;
-
+use App\Models\ActivityLogger;
 class BackupController extends Controller
 {
     protected $backupPath;

@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\VerificationCodeMail;
 use Illuminate\Support\Facades\Storage;
 use App\Mail\AccountStatusMail;
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+use Illuminate\Support\Facades\Http;
 class AuthController extends Controller
 {
     /**
@@ -28,18 +31,39 @@ class AuthController extends Controller
             'date_of_birth' => 'required|date',
             'sex' => 'required|in:Male,Female,Other',
             'password' => 'required|string|min:8|confirmed',
-            'id_url' => 'required|image|mimes:jpg,jpeg,png|max:2048', // 👈 added
+            'id_url' => 'required|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
+        // ---------------- UPLOAD IMAGE ----------------
         $imagePath = null;
 
         if ($request->hasFile('id_url')) {
             $file = $request->file('id_url');
-            // store only the path, no full URL
             $imagePath = Storage::disk('s3')->putFile('ids', $file);
         }
 
-        // ✅ Create user
+        // ---------------- CREATE IN SUPABASE ----------------
+        $supabaseResponse = Http::withHeaders([
+            'apikey' => env('SUPABASE_SERVICE_ROLE_KEY'),
+            'Authorization' => 'Bearer ' . env('SUPABASE_SERVICE_ROLE_KEY'),
+            'Content-Type' => 'application/json',
+        ])->post(env('SUPABASE_URL') . '/auth/v1/admin/users', [
+            'email' => $request->email,
+            'password' => $request->password,
+            'email_confirm' => true, // auto-confirm (optional)
+        ]);
+
+        if (!$supabaseResponse->successful()) {
+            return response()->json([
+                'status' => 'failed',
+                'message' => 'Failed to create user in Supabase',
+                'error' => $supabaseResponse->json()
+            ], 500);
+        }
+
+        $supabaseUser = $supabaseResponse->json();
+
+        // ---------------- CREATE IN LARAVEL ----------------
         $user = User::create([
             'first_name' => $request->first_name,
             'surname' => $request->surname,
@@ -48,38 +72,27 @@ class AuthController extends Controller
             'sex' => $request->sex,
             'date_of_birth' => $request->date_of_birth,
             'password' => Hash::make($request->password),
-            'id_url' => $imagePath, 
+            'id_url' => $imagePath,
+            'supabase_id' => $supabaseUser['id'] ?? null, // 🔥 IMPORTANT
         ]);
 
-        // Generate 6-digit verification code
+        // ---------------- EMAIL VERIFICATION ----------------
         $code = rand(100000, 999999);
+
         $user->update([
             'email_verification_code' => $code,
             'email_verification_expires_at' => now()->addMinutes(10),
         ]);
 
-
-        // Send code via email
         Mail::to($user->email)->send(new VerificationCodeMail($code));
 
-        // event(new Registered($user));
-
         return response()->json([
-            'message' => 'Account created. Please verify your email with the code sent.',
+            'status' => 'success',
+            'message' => 'Account created successfully (Synced with Supabase)',
             'data' => $user
         ], 201);
-
-        // $token = $user->createToken('auth_token')->plainTextToken;
-
-        // return response()->json([
-        //     'status' => 'success',
-        //     'message' => 'User registered successfully',
-        //     'data' => [
-        //         'user' => $user,
-        //         'token' => $token,
-        //     ],
-        // ], 201);
     }
+
 
     public function updateProfile(UpdateUserRequest $request)
     {
@@ -97,7 +110,96 @@ class AuthController extends Controller
         ]);
     }
 
+public function supabaseLogin(Request $request)
+{
+    $request->validate([
+        'token' => 'required|string',
+    ]);
 
+    $token = $request->token;
+
+    \Log::info('Supabase login attempt', ['token' => $token]);
+
+    try {
+        // ✅ Call Supabase to verify token and get user info
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . $token,
+            'apikey' => env('SUPABASE_ANON_KEY'), // ✅ add this
+        ])->get(env('SUPABASE_URL') . '/auth/v1/user');
+
+        \Log::info('Supabase /user response', ['status' => $response->status(), 'body' => $response->body()]);
+
+        if ($response->failed()) {
+            \Log::warning('Supabase token invalid', ['response' => $response->json()]);
+            return response()->json([
+                'status' => 'failed',
+                'message' => 'Invalid Supabase token',
+                'error' => $response->json()
+            ], 401);
+        }
+
+        $supabaseUser = $response->json();
+        \Log::info('Supabase user data', $supabaseUser);
+
+        $email = $supabaseUser['email'] ?? null;
+        $supabaseId = $supabaseUser['id'] ?? null;
+
+        if (!$email) {
+            \Log::warning('Supabase user has no email', ['supabaseUser' => $supabaseUser]);
+            return response()->json([
+                'status' => 'failed',
+                'message' => 'Invalid Supabase user data',
+            ], 401);
+        }
+
+        // ✅ Find or create user in Laravel
+        $user = User::firstOrCreate(
+            ['email' => $email],
+            [
+                'first_name' => $supabaseUser['user_metadata']['first_name'] ?? 'Supabase',
+                'surname' => $supabaseUser['user_metadata']['surname'] ?? 'User',
+                'password' => bcrypt(str()->random(16)), // dummy password
+                'supabase_id' => $supabaseId,
+            ]
+        );
+
+        \Log::info('Laravel user found or created', ['user_id' => $user->id]);
+
+        // 🔑 Create Laravel Sanctum token
+        $sanctumToken = $user->createToken('auth_token')->plainTextToken;
+
+        \Log::info('Sanctum token created', ['token' => $sanctumToken]);
+
+        // ✅ Set cookie (secure=false for localhost)
+        $cookie = cookie(
+            'auth_token',
+            $sanctumToken,
+            60 * 24 * 30, // 30 days
+            '/',
+            null,
+            true, // secure=false for localhost
+            true,  // httpOnly
+            false,
+            'None' // SameSite=None allows cross-origin
+        );
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Supabase login successful',
+            'data' => [
+                'user' => $user,
+            ],
+        ])->withCookie($cookie);
+
+    } catch (\Exception $e) {
+        \Log::error('Supabase login error', ['exception' => $e->getMessage()]);
+        return response()->json([
+            'status' => 'failed',
+            'message' => 'An error occurred during login',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+}
 
 
     public function index()
@@ -483,23 +585,68 @@ class AuthController extends Controller
         ]);
 
         $user = User::where('email', $request->email)->first();
+
         if (!$user) {
+            \Log::warning('Password reset attempt on non-existent email', ['email' => $request->email]);
             return response()->json(['message' => 'Account not found'], 404);
         }
 
-        if ($user->password_reset_code != $request->code || $user->password_reset_expires_at < now()) {
+        // Check code validity
+        if (
+            $user->password_reset_code != $request->code ||
+            !$user->password_reset_expires_at ||
+            $user->password_reset_expires_at < now()
+        ) {
+            \Log::warning('Invalid or expired password reset code', [
+                'user_id' => $user->id,
+                'code_provided' => $request->code,
+                'code_expected' => $user->password_reset_code,
+            ]);
             return response()->json(['message' => 'Invalid or expired code'], 400);
         }
 
-        $user->update([
-            'password' => Hash::make($request->password),
-            'password_reset_code' => null,
-            'password_reset_expires_at' => null,
-        ]);
+        // Update Laravel password
+        $user->password = Hash::make($request->password);
+        $user->password_reset_code = null;
+        $user->password_reset_expires_at = null;
+        $user->save();
+
+        \Log::info('Password reset in Laravel successful', ['user_id' => $user->id]);
+
+        // ---------------- Sync password to Supabase ----------------
+        if ($user->supabase_id) {
+            try {
+                $supabaseResponse = Http::withHeaders([
+                    'apikey' => env('SUPABASE_SERVICE_ROLE_KEY'),
+                    'Authorization' => 'Bearer ' . env('SUPABASE_SERVICE_ROLE_KEY'),
+                    'Content-Type' => 'application/json',
+                ])->put(env('SUPABASE_URL') . '/auth/v1/admin/users/' . $user->supabase_id, [
+                    'password' => $request->password,
+                ]);
+
+                if (!$supabaseResponse->successful()) {
+                    \Log::error('Supabase password update failed', [
+                        'user_id' => $user->id,
+                        'response' => $supabaseResponse->body(),
+                    ]);
+
+                    return response()->json([
+                        'message' => 'Password reset in Laravel succeeded, but failed in Supabase',
+                        'supabase_error' => $supabaseResponse->json()
+                    ], 500);
+                }
+
+                \Log::info('Supabase password updated successfully', ['user_id' => $user->id]);
+            } catch (\Exception $e) {
+                return response()->json([
+                    'message' => 'Password reset in Laravel succeeded, but Supabase update threw exception',
+                    'error' => $e->getMessage()
+                ], 500);
+            }
+        }
 
         return response()->json(['message' => 'Password reset successful']);
     }
-
     // ---------------- RESEND EMAIL VERIFICATION ----------------
     public function resendVerificationCode(Request $request)
     {
