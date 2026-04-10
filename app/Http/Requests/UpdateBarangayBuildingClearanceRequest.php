@@ -40,7 +40,7 @@ class UpdateBarangayBuildingClearanceRequest extends FormRequest
             'punongBarangay' => 'nullable|string|max:100',
             'forThePunongBarangay' => 'nullable|string|max:100',
             'barangayPosition' => 'nullable|string|max:50',
-            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED',  
+            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED',  
         ];
     }
 

@@ -26,6 +26,7 @@ use App\Http\Controllers\AIController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\DocumentReplyController;
 use App\Http\Controllers\OfficialReceiptController;
+use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\ServicePriceController;
 use App\Http\Controllers\ReleaseDocumentController;
 // Public routes
@@ -100,6 +101,8 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::apiResource('business-clearances', BarangayBusinessClearanceController::class);
     Route::apiResource('building-clearances', BarangayBuildingClearanceController::class);
     Route::apiResource('barangay-clearances', BarangayClearanceController::class);
+    Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+
 
     // Release a document: sets status=released, uploads PDF to S3
     Route::post(

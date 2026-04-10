@@ -172,7 +172,7 @@ class ScheduleController extends Controller
         ]);
 
         // ✅ Ensure status stays SCHEDULED after a reschedule too
-        $this->updateDocumentStatus($schedule->document_type, $documentNumber, 'SCHEDULED');
+        $this->updateDocumentStatus($schedule->document_type, $documentNumber, 'RESCHEDULED');
 
         activity_log(
             'Schedule Rescheduled',

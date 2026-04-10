@@ -23,7 +23,9 @@ return new class extends Migration
                 'new_document',
                 'update_document',
                 'delete_document',
-                'create',      // <-- add this
+                'create',
+                'update',          // ✅ added
+                'status_update',   // ✅ added
                 'other'
             ])->default('other')->change();
             $table->text('description')->nullable();

@@ -3,15 +3,13 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
-use ZipArchive;
-use RecursiveIteratorIterator;
-use RecursiveDirectoryIterator;
-use App\Models\ActivityLogger;
+use Illuminate\Support\Facades\Storage;
+
 class BackupController extends Controller
 {
     protected $backupPath;
+    protected $s3Folder = 'backups';
 
     public function __construct()
     {
@@ -19,39 +17,36 @@ class BackupController extends Controller
     }
 
     /* =========================
-       1. FULL BACKUP (DB + Storage)
+       1. RUN DATABASE BACKUP
     ========================= */
     public function runFullBackup(Request $request)
     {
         $timestamp = date('Y_m_d_H_i_s');
-        $zipFileName = "backup_full_{$timestamp}.zip";
-        $zipFilePath = $this->backupPath . $zipFileName;
-
-        if (!file_exists($this->backupPath)) mkdir($this->backupPath, 0777, true);
-
-        // 1. Dump database
-        $sqlFileName = "database_{$timestamp}.sql";
+        $sqlFileName = "backup_db_{$timestamp}.sql";
         $sqlFilePath = $this->backupPath . $sqlFileName;
-        $this->dumpDatabase($sqlFilePath);
 
-        // 2. Create ZIP and add SQL + images
-        $zip = new ZipArchive();
-        if ($zip->open($zipFilePath, ZipArchive::CREATE) !== TRUE) {
-            return response()->json(['success' => false, 'message' => 'Could not create ZIP']);
+        if (!file_exists($this->backupPath)) {
+            mkdir($this->backupPath, 0777, true);
         }
 
-        // Add SQL dump
-        $zip->addFile($sqlFilePath, $sqlFileName);
+        // 1. Dump database locally (temp)
+        $this->dumpDatabase($sqlFilePath);
 
-        // Add public storage files (downloaded from Supabase bucket)
-        $this->addStorageToZip($zip);
+        // 2. Upload to S3
+        $s3Path = $this->s3Folder . '/' . $sqlFileName;
+        Storage::disk('s3')->put(
+            $s3Path,
+            file_get_contents($sqlFilePath)
+        );
 
-        $zip->close();
-
-        // Remove temporary SQL file
+        // 3. Remove local temp file
         unlink($sqlFilePath);
 
-        return response()->json(['success' => true, 'file' => $zipFileName]);
+        return response()->json([
+            'success' => true,
+            'file'    => $sqlFileName,
+            's3_path' => $s3Path,
+        ]);
     }
 
     /* =========================
@@ -59,67 +54,43 @@ class BackupController extends Controller
     ========================= */
     private function dumpDatabase($outputFile)
     {
-        $host = env('DB_HOST'); // Supabase host
-        $port = env('DB_PORT', 5432);
-        $dbName = env('DB_DATABASE');
-        $user = env('DB_USERNAME');
+        $host     = env('DB_HOST');
+        $port     = env('DB_PORT', 5432);
+        $dbName   = env('DB_DATABASE');
+        $user     = env('DB_USERNAME');
         $password = env('DB_PASSWORD');
 
-        // Set password for pg_dump
         putenv("PGPASSWORD=$password");
 
-        // pg_dump command
-        $command = "pg_dump -h $host -p $port -U $user -d $dbName -F p -v -f \"$outputFile\"";
+        $command = "pg_dump -h {$host} -p {$port} -U {$user} -d {$dbName} -F p -f \"{$outputFile}\"";
 
         exec($command, $output, $returnVar);
 
         if ($returnVar !== 0 || !file_exists($outputFile)) {
-            throw new \Exception("Database dump failed! Command output: " . implode("\n", $output));
+            throw new \Exception("Database dump failed: " . implode("\n", $output));
         }
     }
 
     /* =========================
-       HELPER: ADD STORAGE TO ZIP
-    ========================= */
-    private function addStorageToZip($zip)
-    {
-        // Local storage folder (downloaded from Supabase bucket)
-        $storagePath = storage_path('app/public'); // you should sync your bucket to this folder
-        if (!file_exists($storagePath)) return;
-
-        $files = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($storagePath),
-            RecursiveIteratorIterator::LEAVES_ONLY
-        );
-
-        foreach ($files as $file) {
-            if (!$file->isFile()) continue;
-
-            $filePath = $file->getRealPath();
-            $relativePath = 'public/' . substr($filePath, strlen($storagePath) + 1);
-
-            $zip->addFile($filePath, $relativePath);
-        }
-    }
-
-    /* =========================
-       2. LIST BACKUPS
+       2. LIST BACKUPS (from S3)
     ========================= */
     public function listBackups()
     {
-        if (!file_exists($this->backupPath)) {
+        $files = Storage::disk('s3')->files($this->s3Folder);
+
+        if (empty($files)) {
             return response()->json(['success' => true, 'backups' => []]);
         }
 
-        $files = File::files($this->backupPath);
         $backups = [];
 
         foreach ($files as $file) {
+            $fileName = basename($file);
             $backups[] = [
-                'name' => $file->getFilename(),
-                'size_kb' => round($file->getSize() / 1024, 2),
-                'last_modified' => date('Y-m-d H:i:s', $file->getMTime()),
-                'download_url' => url('/backup/' . $file->getFilename() . '/download')
+                'name'          => $fileName,
+                'size_kb'       => round(Storage::disk('s3')->size($file) / 1024, 2),
+                'last_modified' => date('Y-m-d H:i:s', Storage::disk('s3')->lastModified($file)),
+                'download_url'  => url('/backup/' . $fileName . '/download'),
             ];
         }
 
@@ -127,16 +98,27 @@ class BackupController extends Controller
     }
 
     /* =========================
-       3. DOWNLOAD BACKUP
+       3. DOWNLOAD BACKUP (from S3)
     ========================= */
     public function downloadBackup($fileName)
     {
-        $filePath = $this->backupPath . $fileName;
+        $s3Path = $this->s3Folder . '/' . $fileName;
 
-        if (!file_exists($filePath)) {
-            return response()->json(['success' => false, 'message' => 'Backup file not found!'], 404);
+        if (!Storage::disk('s3')->exists($s3Path)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Backup file not found!',
+            ], 404);
         }
 
-        return response()->download($filePath);
+        // Stream directly from S3
+        $fileStream = Storage::disk('s3')->readStream($s3Path);
+
+        return response()->stream(function () use ($fileStream) {
+            fpassthru($fileStream);
+        }, 200, [
+            'Content-Type'        => 'application/octet-stream',
+            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
+        ]);
     }
 }

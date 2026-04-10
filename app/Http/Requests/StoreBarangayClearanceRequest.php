@@ -48,7 +48,7 @@ class StoreBarangayClearanceRequest extends FormRequest
             'issued_on' => 'nullable|date',
             'or_no' => 'nullable|string|max:50',
             'bomarke' => 'nullable|string|max:50',
-            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED',  
+            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED',  
         ];
     }
 }
