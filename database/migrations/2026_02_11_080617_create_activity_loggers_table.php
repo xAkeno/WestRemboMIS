@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('user_name')->nullable();
             $table->string('user_email')->nullable();
             $table->string('action');
+
             $table->enum('type', [
                 'login_attempt',
                 'account_change',
@@ -24,10 +25,11 @@ return new class extends Migration
                 'update_document',
                 'delete_document',
                 'create',
-                'update',          // ✅ added
-                'status_update',   // ✅ added
+                'update',
+                'status_update',
                 'other'
-            ])->default('other')->change();
+            ])->default('other');
+
             $table->text('description')->nullable();
             $table->string('ip_address')->nullable();
             $table->timestamps();
