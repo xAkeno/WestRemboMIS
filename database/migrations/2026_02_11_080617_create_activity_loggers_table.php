@@ -20,7 +20,7 @@ return new class extends Migration
 
             $table->enum('type', [
                 'login_attempt',
-                'account_change',
+                'account_change',   
                 'new_document',
                 'update_document',
                 'delete_document',

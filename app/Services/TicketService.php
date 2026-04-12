@@ -63,14 +63,14 @@ class TicketService
                 'serviceable_id' => $serviceable ? $serviceable->id : null,
             ]);
 
-            ActivityLog::create([
-                'ticket_id' => $ticket->id,
-                'action' => 'created',
-                'old_status' => null,
-                'new_status' => 'Pending',
-                'staff_id' => null,
-                'remarks' => 'Ticket created',
-            ]);
+            // ActivityLog::create([
+            //     'ticket_id' => $ticket->id,
+            //     'action' => 'created',
+            //     'old_status' => null,
+            //     'new_status' => 'Pending',
+            //     'staff_id' => null,
+            //     'remarks' => 'Ticket created',
+            // ]);
 
             return $ticket;
         });
@@ -102,14 +102,14 @@ class TicketService
                 'serviceable_id' => $serviceable->id,
             ]);
 
-            ActivityLog::create([
-                'ticket_id' => $ticket->id,
-                'action' => 'created',
-                'old_status' => null,
-                'new_status' => 'Pending',
-                'staff_id' => null,
-                'remarks' => 'Ticket created for service record',
-            ]);
+            // ActivityLog::create([
+            //     'ticket_id' => $ticket->id,
+            //     'action' => 'created',
+            //     'old_status' => null,
+            //     'new_status' => 'Pending',
+            //     'staff_id' => null,
+            //     'remarks' => 'Ticket created for service record',
+            // ]);
 
             return $ticket;
         });
@@ -136,14 +136,14 @@ class TicketService
 
         $ticket->save();
 
-        ActivityLog::create([
-            'ticket_id' => $ticket->id,
-            'action' => 'status_changed',
-            'old_status' => $old,
-            'new_status' => $newStatus,
-            'staff_id' => $staffId,
-            'remarks' => null,
-        ]);
+        // ActivityLog::create([
+        //     'ticket_id' => $ticket->id,
+        //     'action' => 'status_changed',
+        //     'old_status' => $old,
+        //     'new_status' => $newStatus,
+        //     'staff_id' => $staffId,
+        //     'remarks' => null,
+        // ]);
 
         // If released, automatically move next pending ticket to In Progress
         if ($newStatus === 'Released') {

@@ -29,6 +29,9 @@ use App\Http\Controllers\OfficialReceiptController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\ServicePriceController;
 use App\Http\Controllers\ReleaseDocumentController;
+use App\Http\Controllers\DashboardController;
+
+
 // Public routes
 Route::post('/login', [AuthController::class, 'supabaseLogin']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -88,6 +91,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
         ]);
         return $response->json();
     });
+    Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/test-embedding', [AIController::class, 'embedTest']);
     Route::get('/getAllUser', [AuthController::class, 'index']);
     Route::get('/users/{id}', [AuthController::class, 'show']);
