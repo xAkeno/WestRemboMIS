@@ -11,7 +11,7 @@ return new class extends Migration {
             $table->bigIncrements('id');
             $table->string('service_type')->index();
             $table->string('first_name');
-            $table->string('last_name');
+            $table->string('surname');
             $table->string('middle_name')->nullable();
             $table->string('authorized_person')->nullable();
             $table->text('address')->nullable();

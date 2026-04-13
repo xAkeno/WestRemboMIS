@@ -28,7 +28,7 @@ class KioskController extends Controller
         $common = [
             "service_type" => $serviceType,
             'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
+            'surname' => $data['surname'],
             'middle_name' => $data['middle_name'],
             'authorized_person' => $data['authorized_person'] ?? null,
             'address' => $data['address'],
@@ -77,17 +77,17 @@ class KioskController extends Controller
     {
         $request->validate([
             'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'surname' => 'required|string|max:255',
             'date_of_birth' => 'required|date',
         ]);
 
         $firstName = $request->input('first_name');
-        $lastName = $request->input('last_name');
+        $lastName = $request->input('surname');
         $dob = $this->normalizeDate($request->input('date_of_birth'));
 
         try {
             $kiosk = Kiosk::where('first_name', 'like', $firstName)
-                ->where('last_name', 'like', $lastName)
+                ->where('surname', 'like', $lastName)
                 ->where('date_of_birth', $dob)
                 ->first();
 

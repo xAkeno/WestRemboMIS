@@ -8,24 +8,10 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use App\Traits\ExtractsUserFromAuthToken;
 
-/**
- * ReleaseDocumentController
- *
- * Routes to add in api.php:
- *   POST   /api/documents/release/{documentType}/{id}   → release (upload PDF + set status)
- *   GET    /api/documents/release/{documentType}/{id}/download → get signed S3 URL
- *
- * Example:
- *   Route::post('documents/release/{documentType}/{id}', [ReleaseDocumentController::class, 'release']);
- *   Route::get('documents/release/{documentType}/{id}/download', [ReleaseDocumentController::class, 'download']);
- */
 class ReleaseDocumentController extends Controller
 {
     use ExtractsUserFromAuthToken;
 
-    /**
-     * Map URL segment → Eloquent model class
-     */
     private const MODEL_MAP = [
         'barangay-certificates' => \App\Models\BarangayCertificate::class,
         'barangay-clearances'   => \App\Models\BarangayClearance::class,
@@ -35,11 +21,6 @@ class ReleaseDocumentController extends Controller
 
     /**
      * POST /api/documents/release/{documentType}/{id}
-     *
-     * Expects multipart/form-data:
-     *   - file: the generated PDF blob (binary)
-     *
-     * Sets status = 'released', uploads PDF to S3, saves path.
      */
     public function release(Request $request, string $documentType, int $id): JsonResponse
     {
@@ -62,11 +43,15 @@ class ReleaseDocumentController extends Controller
 
             $file = $request->file('file');
 
-            $bcertSlug = preg_replace('/[^a-zA-Z0-9\-_]/', '_', $record->bcert_number ?? (string) $id);
-            $filename  = "{$id}_{$bcertSlug}.pdf";
-            $s3Path    = "released_documents/{$documentType}/{$filename}";
+            $bcertSlug = preg_replace(
+                '/[^a-zA-Z0-9\-_]/',
+                '_',
+                $record->bcert_number ?? (string) $id
+            );
 
-            // delete old file if exists
+            $filename = "{$id}_{$bcertSlug}.pdf";
+            $s3Path   = "released_documents/{$documentType}/{$filename}";
+
             if (!empty($record->released_document_path)) {
                 Storage::disk('s3')->delete($record->released_document_path);
             }
@@ -77,31 +62,43 @@ class ReleaseDocumentController extends Controller
                 $filename
             );
 
-            // 1. Update document
             $record->update([
                 'status'                 => 'RELEASED',
                 'released_document_path' => $s3Path,
                 'released_at'            => now(),
             ]);
 
-            // 2. 🔥 FIXED: sync ticket properly
+            // 1. Try direct relation match first (schedule/system-generated)
             $ticket = \App\Models\Ticket::where('serviceable_type', $modelClass)
                 ->where('serviceable_id', $record->id)
                 ->first();
-            
+
+            // 2. If not found, fallback to Kiosk matching
+            // FIX: Kiosk stores `surname`, not `last_name`
             if (!$ticket) {
-                Log::info("Trying fallback kiosk match...");
+                $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
+                    ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
+                    ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
+                    ->first();
+
+                if ($kiosk) {
+                    $ticket = \App\Models\Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                        ->where('serviceable_id', $kiosk->id)
+                        ->first();
+                }
             }
 
+            // 3. Update ticket if found
             if ($ticket) {
                 $ticket->update([
-                    'status'     => 'Released',
-                    'released_at'=> now(),
+                    'status'      => 'Released',
+                    'released_at' => now(),
                 ]);
             } else {
                 Log::warning("No ticket found for released document", [
                     'type' => $documentType,
-                    'id'   => $id
+                    'id'   => $id,
+                    'name' => $record->first_name . ' ' . $record->surname,
                 ]);
             }
 
@@ -127,8 +124,6 @@ class ReleaseDocumentController extends Controller
 
     /**
      * GET /api/documents/release/{documentType}/{id}/download
-     *
-     * Returns a 15-minute signed S3 URL for the released PDF.
      */
     public function download(string $documentType, int $id): JsonResponse
     {
@@ -167,7 +162,7 @@ class ReleaseDocumentController extends Controller
                 'status' => 'success',
                 'data'   => [
                     'url'        => $signedUrl,
-                    'expires_in' => 900, // seconds
+                    'expires_in' => 900,
                     'filename'   => basename($record->released_document_path),
                 ],
             ]);

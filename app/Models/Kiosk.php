@@ -12,7 +12,7 @@ class Kiosk extends Model
     protected $fillable = [
         'service_type',
         'first_name',
-        'last_name',
+        'surname',
         'middle_name',
         'authorized_person',
         'address',

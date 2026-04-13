@@ -16,7 +16,7 @@ class KioskSubmitRequest extends FormRequest
         return [
                 'service_type' => 'required|string|in:Barangay Clearance,Business Clearance,Building Clearance,Barangay Certificate,Resident Registration',
                 'first_name' => 'required|string|max:255',
-                'last_name' => 'required|string|max:255',
+                'surname' => 'required|string|max:255',
                 'middle_name' => 'required|string|max:255',
                 'authorized_person' => 'nullable|string|max:255',
                 'address' => 'required|string|max:1000',

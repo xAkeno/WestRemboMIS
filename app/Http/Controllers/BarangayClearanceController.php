@@ -11,15 +11,17 @@ use Illuminate\Http\Request;
 use App\Models\Ticket;
 use Carbon\Carbon;
 use App\Models\ActivityLogger;
+
 class BarangayClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
+
     /**
      * Display a listing of the resource.
      */
     public function index(Request $request)
     {
-        // ✅ Auto-expire documents
+        // Auto-expire documents
         BarangayClearance::where('status', 'RELEASED')
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', Carbon::now())
@@ -27,151 +29,124 @@ class BarangayClearanceController extends Controller
 
         $query = BarangayClearance::with('schedule');
 
-        // 🔍 Search
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('surname', 'like', "%{$search}%")
-                ->orWhere('first_name', 'like', "%{$search}%")
-                ->orWhere('bcert_number', 'like', "%{$search}%");
+                  ->orWhere('first_name', 'like', "%{$search}%")
+                  ->orWhere('bcert_number', 'like', "%{$search}%");
             });
         }
 
-        // 📍 Zone
         if ($request->filled('zone')) {
             $query->where('zone', $request->zone);
         }
 
-        // 📍 Street
         if ($request->filled('street')) {
             $query->where('street', $request->street);
         }
 
-        // 📍 Purpose
         if ($request->filled('purpose')) {
             $query->where('purpose', $request->purpose);
         }
 
-        // 📍 Status
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // 📅 Predefined date filters
         if ($request->filled('filter_date')) {
             switch ($request->filter_date) {
                 case 'this_week':
-                    $query->whereBetween('created_at', [
-                        now()->startOfWeek(),
-                        now()->endOfWeek()
-                    ]);
+                    $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()]);
                     break;
-
                 case 'this_month':
                     $query->whereMonth('created_at', now()->month)
-                        ->whereYear('created_at', now()->year);
+                          ->whereYear('created_at', now()->year);
                     break;
-
                 case 'this_year':
                     $query->whereYear('created_at', now()->year);
                     break;
             }
         }
 
-        // 📅 Custom date range
         if ($request->filled('from') && $request->filled('to')) {
             $query->whereBetween('created_at', [
                 $request->from . ' 00:00:00',
-                $request->to . ' 23:59:59'
+                $request->to   . ' 23:59:59',
             ]);
         }
 
-        // 📅 Schedule filter (example - adjust column if needed)
         if ($request->filled('schedule_filter')) {
             $query->whereHas('schedule', function ($q) use ($request) {
                 $q->where('schedule_date', $request->schedule_filter);
-                // OR use schedule_time depending on your filter
             });
         }
 
-        // 🔽 Sorting
-        $sortField = $request->get('sortField', 'created_at');
+        $sortField     = $request->get('sortField', 'created_at');
         $sortDirection = $request->get('sortDirection', 'desc');
+        $allowedSorts  = ['created_at', 'surname', 'first_name', 'status'];
 
-        $allowedSorts = ['created_at', 'surname', 'first_name', 'status'];
-
-        if (!in_array($sortField, $allowedSorts)) {
+        if (! in_array($sortField, $allowedSorts)) {
             $sortField = 'created_at';
         }
 
         $query->orderBy($sortField, $sortDirection);
 
-        // 📄 Pagination (FIXED)
-        $perPage = $request->get('pageSize', 15);
-
+        $perPage    = $request->get('pageSize', 15);
         $clearances = $query->paginate($perPage);
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Barangay clearances retrieved successfully',
-            'data' => $clearances,
+            'data'    => $clearances,
         ]);
     }
 
     public function chartData(Request $request)
     {
         $filter = $request->filter_date ?? 'month';
-        $from = $request->from ?? null;
-        $to = $request->to ?? null;
-        
+        $from   = $request->from ?? null;
+        $to     = $request->to   ?? null;
+
         $query = BarangayClearance::query();
 
-        // Custom from-to range
         if ($from && $to) {
-            $query->whereBetween('created_at', [
-                $from . ' 00:00:00',
-                $to . ' 23:59:59'
-            ])
-            ->selectRaw('DATE(created_at) as period, COUNT(*) as count')
-            ->groupBy('period')
-            ->orderBy('period');
+            $query->whereBetween('created_at', [$from . ' 00:00:00', $to . ' 23:59:59'])
+                  ->selectRaw('DATE(created_at) as period, COUNT(*) as count')
+                  ->groupBy('period')
+                  ->orderBy('period');
         } else {
-            // Predefined filters
             if ($filter === 'week') {
                 $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
-                    ->selectRaw('DAYOFWEEK(created_at) as day_num, DAYNAME(created_at) as period, COUNT(*) as count')
-                    ->groupBy('day_num', 'period')
-                    ->orderBy('day_num');
+                      ->selectRaw('DAYOFWEEK(created_at) as day_num, DAYNAME(created_at) as period, COUNT(*) as count')
+                      ->groupBy('day_num', 'period')
+                      ->orderBy('day_num');
             } elseif ($filter === 'month') {
                 $query->whereMonth('created_at', now()->month)
-                    ->whereYear('created_at', now()->year)
-                    ->selectRaw('DAY(created_at) as period, COUNT(*) as count')
-                    ->groupBy('period')
-                    ->orderBy('period');
+                      ->whereYear('created_at', now()->year)
+                      ->selectRaw('DAY(created_at) as period, COUNT(*) as count')
+                      ->groupBy('period')
+                      ->orderBy('period');
             } elseif ($filter === 'year') {
                 $query->whereYear('created_at', now()->year)
-                    ->selectRaw('MONTH(created_at) as month_num, MONTHNAME(created_at) as period, COUNT(*) as count')
-                    ->groupBy('month_num', 'period')
-                    ->orderBy('month_num');
+                      ->selectRaw('MONTH(created_at) as month_num, MONTHNAME(created_at) as period, COUNT(*) as count')
+                      ->groupBy('month_num', 'period')
+                      ->orderBy('month_num');
             }
         }
 
-        $data = $query->get();
-
         return response()->json([
             'status' => 'success',
-            'data' => $data
+            'data'   => $query->get(),
         ]);
     }
 
-
-    public function total(Request $request){
-        $total = BarangayClearance::count();
-
+    public function total(Request $request)
+    {
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Barangay clearances total retrieved successfully',
-            'data' => $total,
+            'data'    => BarangayClearance::count(),
         ]);
     }
 
@@ -180,56 +155,57 @@ class BarangayClearanceController extends Controller
      */
     public function store(StoreBarangayClearanceRequest $request)
     {
-        $lastResident = BarangayClearance::latest('created_at')->first();
-        $lastNumber = $lastResident ? intval(substr($lastResident->bcert_number, 8)) : 0;
-        $newRecord = 'BCLEAR-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+        $lastClearance = BarangayClearance::latest('created_at')->first();
+        $lastNumber    = $lastClearance ? intval(substr($lastClearance->bcert_number, 8)) : 0;
+        $newRecord     = 'BCLEAR-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
-        $data = $request->validated();
+        $data                 = $request->validated();
         $data['bcert_number'] = $newRecord;
-        $data['status'] = 'ENCODED';
-        $data['created_by'] = $this->getUserIdFromAuthToken();
-        $data['updated_by'] = $this->getUserIdFromAuthToken();
+        $data['status']       = 'ENCODED';
+        $data['created_by']   = $this->getUserIdFromAuthToken();
+        $data['updated_by']   = $this->getUserIdFromAuthToken();
 
         $clearance = BarangayClearance::create($data);
 
         activity_log('Barangay Clearance Created', 'create', 'Created #: ' . $clearance->bcert_number);
 
-        // Find the ticket linked to a Kiosk with matching service data
-        // then move it from Pending → Processing
-        Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
-            ->where('status', 'Pending')
-            ->whereHas('serviceable', function ($q) use ($data) {
-                $q->where('service_type', 'Barangay Clearance')
-                ->where('first_name', $data['first_name'])
-                ->where('last_name', $data['surname']);
-            })
-            ->update(['status' => 'Processing']);
+        // FIX: Kiosk stores the field as `surname`, not `last_name`
+        $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
+            ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
+            ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
+            ->first();
+
+        if ($kiosk) {
+            Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                ->where('serviceable_id', $kiosk->id)
+                ->whereIn('status', ['pending', 'waiting', 'Pending'])
+                ->update(['status' => 'called']);
+        }
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Barangay clearance created successfully',
-            'data' => ['service' => $clearance, 'ticket' => null],
+            'data'    => ['service' => $clearance, 'ticket' => null],
         ], 201);
     }
-    public function latestRecord(){
-        $lastResident = BarangayClearance::latest('created_at')->first();
-        $lastNumber = $lastResident ? intval(substr($lastResident->bcert_number, 8)) : 0;
-        $newRecord = 'BCLEAR-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+
+    public function latestRecord()
+    {
+        $lastClearance = BarangayClearance::latest('created_at')->first();
+        $lastNumber    = $lastClearance ? intval(substr($lastClearance->bcert_number, 8)) : 0;
+        $newRecord     = 'BCLEAR-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
         $lastId = BarangayClearance::latest('id')->first();
-        $lastNumber = intval($lastId->id);
-        $sum = intval($lastNumber + 1);
-
-        $data = [
-            'nextRecord' => $newRecord,
-            'nextId' => $sum,
-        ];
+        $sum    = intval($lastId->id) + 1;
 
         return response()->json([
-            'status' => "success",
-            'message' => "Successfully get the latest",
-            'data' => $data,
-        ],200);
+            'status'  => 'success',
+            'message' => 'Successfully get the latest',
+            'data'    => [
+                'nextRecord' => $newRecord,
+                'nextId'     => $sum,
+            ],
+        ], 200);
     }
 
     /**
@@ -238,9 +214,9 @@ class BarangayClearanceController extends Controller
     public function show(BarangayClearance $barangayClearance)
     {
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Barangay clearance retrieved successfully',
-            'data' => $barangayClearance,
+            'data'    => $barangayClearance,
         ]);
     }
 
@@ -252,16 +228,12 @@ class BarangayClearanceController extends Controller
         $data = $request->validated();
         $barangayClearance->update($data);
 
-        activity_log(
-            'Barangay Clearance Updated',
-            'update',
-            'Updated #: ' . $barangayClearance->bcert_number
-        );
+        activity_log('Barangay Clearance Updated', 'update', 'Updated #: ' . $barangayClearance->bcert_number);
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Barangay clearance updated successfully',
-            'data' => $barangayClearance->fresh(),
+            'data'    => $barangayClearance->fresh(),
         ]);
     }
 
@@ -275,32 +247,33 @@ class BarangayClearanceController extends Controller
 
         if ($validated['status'] === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
-            $record->expires_at = now()->addMonths(6);
+            $record->expires_at  = now()->addMonths(6);
         }
 
         $record->status = strtoupper($validated['status']);
         $record->touch();
         $record->save();
 
+        // Map clearance status → ticket status
         $ticketStatusMap = [
-            'PENDING'  => 'Pending',
-            'ENCODED'  => 'Processing',
-            'RELEASED' => 'Released',   
+            'PENDING'  => 'pending',
+            'ENCODED'  => 'called',
+            'RELEASED' => 'released',
         ];
 
-        // Uppercase before map lookup so "released" and "RELEASED" both match
         $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
 
         if ($ticketStatus) {
+            // FIX: Kiosk stores the field as `surname`, not `last_name`
             $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
                 ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(last_name) = ?', [strtolower($record->surname)])
+                ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
                 ->first();
 
-            \Log::info('Kiosk lookup', [
+            \Log::info('Kiosk lookup for status update', [
                 'first_name' => $record->first_name,
                 'surname'    => $record->surname,
-                'kiosk'      => $kiosk?->id,
+                'kiosk_id'   => $kiosk?->id,
             ]);
 
             if ($kiosk) {
@@ -325,25 +298,20 @@ class BarangayClearanceController extends Controller
         ], 200);
     }
 
-
     /**
      * Remove the specified resource from storage.
      */
     public function destroy(BarangayClearance $barangayClearance)
     {
+        $bcertNumber = $barangayClearance->bcert_number;
         $barangayClearance->delete();
 
-        activity_log(
-            'Barangay Clearance Deleted',
-            'delete',
-            'Deleted #: ' . $deleted->bcert_number
-        );
+        activity_log('Barangay Clearance Deleted', 'delete', 'Deleted #: ' . $bcertNumber);
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Barangay clearance deleted successfully',
-            'data' => null,
+            'data'    => null,
         ]);
     }
 }
-
