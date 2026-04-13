@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
-
+use App\Models\BackupSetting;
 class BackupController extends Controller
 {
     protected $backupPath;
@@ -12,6 +12,10 @@ class BackupController extends Controller
     public function __construct()
     {
         $this->backupPath = storage_path('app/backups/');
+
+        if (!file_exists($this->backupPath)) {
+            mkdir($this->backupPath, 0777, true);
+        }
     }
 
     /* =========================
@@ -19,7 +23,7 @@ class BackupController extends Controller
     ========================= */
     public function runDatabaseBackup()
     {
-        $backupDir = $this->backupPath;
+        $backupDir = storage_path('app/backups/');
 
         if (!file_exists($backupDir)) {
             mkdir($backupDir, 0777, true);
@@ -28,47 +32,101 @@ class BackupController extends Controller
         $dbName = env('DB_DATABASE');
         $date = now()->format('Y-m-d_H-i-s');
 
-        // ✅ CLEAN + SORTABLE + NO CONFUSION NAME
         $fileName = "backup_{$dbName}_{$date}.sql";
-        $sqlFile = $backupDir . $fileName;
+        $filePath = $backupDir . $fileName;
 
-        $host = env('DB_HOST', '127.0.0.1');
+        $host = env('DB_HOST');
         $port = env('DB_PORT', 3306);
         $user = env('DB_USERNAME');
         $pass = env('DB_PASSWORD');
-        $db   = $dbName;
 
-        // ✅ SAFE COMMAND (NO REDIRECTION BUGS)
-        $command = "mysqldump --single-transaction --quick --skip-lock-tables " .
-            "-h {$host} -P {$port} -u {$user} --password={$pass} {$db}";
-
-        $output = [];
-        $result = 0;
+        $command = "mysqldump -h {$host} -P {$port} -u {$user} --password={$pass} {$dbName} > \"{$filePath}\"";
 
         exec($command, $output, $result);
 
-        // ❗ WRITE OUTPUT SAFELY
-        file_put_contents($sqlFile, implode("\n", $output));
-
-        // ❗ CHECK FAILURES
-        if ($result !== 0 || !file_exists($sqlFile) || filesize($sqlFile) < 100) {
+        if ($result !== 0 || !file_exists($filePath) || filesize($filePath) < 100) {
             return response()->json([
                 'success' => false,
-                'message' => 'Backup failed or empty file',
-                'debug' => $output
+                'message' => 'Backup failed'
             ], 500);
         }
 
-        // ✅ SAVE LATEST BACKUP POINTER
-        file_put_contents($backupDir . "LATEST_BACKUP.txt", $fileName);
-
         return response()->json([
             'success' => true,
-            'file' => $fileName,
-            'latest' => $fileName,
+            'file' => $fileName
         ]);
     }
 
+    public function getSettings()
+    {
+        // Always return a single row — create it with defaults if it doesn't exist yet
+        $setting = BackupSetting::firstOrCreate(
+            [],
+            [
+                'frequency' => 'daily',
+                'time'      => '02:00',
+                'enabled'   => true,
+            ]
+        );
+ 
+        return response()->json([
+            'success'  => true,
+            'settings' => [
+                'id'          => $setting->id,
+                'enabled'     => $setting->enabled,
+                'frequency'   => $setting->frequency,
+                'time'        => $setting->time,
+                'day_of_week' => $setting->day_of_week ?? null,
+                'updated_at'  => $setting->updated_at,
+            ],
+        ]);
+    }
+    public function saveSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'enabled'     => 'required|boolean',
+            'frequency'   => 'required|in:hourly,daily,weekly',
+            'time'        => 'nullable|date_format:H:i',
+            'day_of_week' => 'nullable|integer|min:0|max:6',
+        ]);
+ 
+        // time is required when frequency is daily or weekly
+        if (in_array($validated['frequency'], ['daily', 'weekly']) && empty($validated['time'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Time is required for daily and weekly schedules.',
+            ], 422);
+        }
+ 
+        // day_of_week is required when frequency is weekly
+        if ($validated['frequency'] === 'weekly' && is_null($validated['day_of_week'] ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Day of week is required for weekly schedules.',
+            ], 422);
+        }
+ 
+        $setting = BackupSetting::first();
+ 
+        if ($setting) {
+            $setting->update($validated);
+        } else {
+            $setting = BackupSetting::create($validated);
+        }
+ 
+        return response()->json([
+            'success'  => true,
+            'message'  => 'Backup schedule saved successfully.',
+            'settings' => [
+                'id'          => $setting->id,
+                'enabled'     => $setting->enabled,
+                'frequency'   => $setting->frequency,
+                'time'        => $setting->time,
+                'day_of_week' => $setting->day_of_week ?? null,
+                'updated_at'  => $setting->updated_at,
+            ],
+        ]);
+    }
     public function restoreUpload(Request $request)
     {
         $request->validate([
