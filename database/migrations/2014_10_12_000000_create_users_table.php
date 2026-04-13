@@ -147,6 +147,66 @@ return new class extends Migration
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        DB::table('users')->insert([
+            'prefix'     => null,
+            'first_name' => 'Clark Kent',
+            'surname'    => 'Raguhos',
+            'middle_name'=> null,
+            'extension_name' => null,
+            'nickname'   => null,
+            'sex'        => 'Female',
+            'marital_status' => null,
+            'name_of_spouse' => null,
+            'date_of_birth' => '2026-04-08',
+            'place_of_birth'=> null,
+            'religion'   => null,
+
+            'email'      => 'craguhos.a12345084@umak.edu.ph',
+            'contact_number' => null,
+
+            'house_block_lot_no' => null,
+            'street'     => null,
+            'zone_purok' => null,
+            'house_owner' => null,
+            'relationship_to_owner' => null,
+
+            'resident_status' => null,
+            'period_of_residency' => null,
+
+            'voter_status' => null,
+            'precinct_no' => null,
+
+            'employment_status' => null,
+            'occupation' => null,
+            'position' => null,
+
+            'pwd_status' => 0,
+            'height_cm' => null,
+            'weight_kg' => null,
+            'blood_type' => null,
+            'complexion' => null,
+
+            'username'   => 'clarkkent',
+            'password'   => Hash::make('password123'),
+
+            'permissions'=> json_encode([
+                'resident',
+                'doc_req',
+                'certificate',
+                'cashier',
+                'reports'
+            ]),
+
+            'role'       => 'ADMIN',
+            'status'     => 'inactive',
+
+            'email_verified_at' => '2026-04-13 05:02:26',
+            'id_url'     => 'ids/u7TABidSan4Gia3gt4GEywh6aQLX1B5KSQyUUZMo.png',
+
+            'created_at' => '2026-04-13 05:01:56',
+            'updated_at' => '2026-04-13 05:02:26',
+        ]);
     }
 
     public function down(): void

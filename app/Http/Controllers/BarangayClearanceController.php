@@ -180,48 +180,35 @@ class BarangayClearanceController extends Controller
      */
     public function store(StoreBarangayClearanceRequest $request)
     {
-
         $lastResident = BarangayClearance::latest('created_at')->first();
         $lastNumber = $lastResident ? intval(substr($lastResident->bcert_number, 8)) : 0;
         $newRecord = 'BCLEAR-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
         $data = $request->validated();
-
         $data['bcert_number'] = $newRecord;
-        $data["status"] = "ENCODED";
+        $data['status'] = 'ENCODED';
         $data['created_by'] = $this->getUserIdFromAuthToken();
         $data['updated_by'] = $this->getUserIdFromAuthToken();
 
-        // $data["created_by"] = auth()->id();
-
-        // Update related ticket status to ENCODED if found
-
         $clearance = BarangayClearance::create($data);
 
-        activity_log(
-            'Barangay Clearance Created',
-            'create',
-            'Created #: ' . $clearance->bcert_number
-        );
+        activity_log('Barangay Clearance Created', 'create', 'Created #: ' . $clearance->bcert_number);
 
-        // Update the related ticket status to ENCODED using correct columns
-        Ticket::query()
-            ->where('serviceable_type', BarangayClearance::class)
-            ->where('serviceable_id', $clearance->id)
-            ->update(['status' => "ENCODED"]);
-
-        $ticket = null;
-        // try {
-        //     $ticket = app(TicketService::class)->createTicketForService($clearance, 'Barangay Clearance', $data['priority'] ?? 'Normal', null);
-        //     \Log::info('Ticket created for Barangay Clearance', ['ticket_id' => $ticket?->id]);
-        // } catch (\Throwable $e) {
-        //     \Log::error('Failed to create ticket for Barangay Clearance: ' . $e->getMessage());
-        // }
+        // Find the ticket linked to a Kiosk with matching service data
+        // then move it from Pending → Processing
+        Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+            ->where('status', 'Pending')
+            ->whereHas('serviceable', function ($q) use ($data) {
+                $q->where('service_type', 'Barangay Clearance')
+                ->where('first_name', $data['first_name'])
+                ->where('last_name', $data['surname']);
+            })
+            ->update(['status' => 'Processing']);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Barangay clearance created successfully',
-            'data' => ['service' => $clearance, 'ticket' => $ticket],
+            'data' => ['service' => $clearance, 'ticket' => null],
         ], 201);
     }
     public function latestRecord(){
@@ -281,20 +268,49 @@ class BarangayClearanceController extends Controller
     public function updateStatusClearance(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED, SCHEDULED, EXPIRED',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID',
         ]);
 
         $record = BarangayClearance::findOrFail($id);
 
-        // ✅ If status becomes RELEASED → set issued + expiry
         if ($validated['status'] === 'RELEASED') {
-            $record->issued_date = $record->issued_date ?? now(); // don't overwrite if exists
+            $record->issued_date = $record->issued_date ?? now();
             $record->expires_at = now()->addMonths(6);
         }
 
-        $record->status = $validated['status'];
+        $record->status = strtoupper($validated['status']);
         $record->touch();
         $record->save();
+
+        $ticketStatusMap = [
+            'PENDING'  => 'Pending',
+            'ENCODED'  => 'Processing',
+            'RELEASED' => 'Released',
+        ];
+
+        // Uppercase before map lookup so "released" and "RELEASED" both match
+        $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
+
+        if ($ticketStatus) {
+            $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
+                ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
+                ->whereRaw('LOWER(last_name) = ?', [strtolower($record->surname)])
+                ->first();
+
+            \Log::info('Kiosk lookup', [
+                'first_name' => $record->first_name,
+                'surname'    => $record->surname,
+                'kiosk'      => $kiosk?->id,
+            ]);
+
+            if ($kiosk) {
+                $updated = Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                    ->where('serviceable_id', $kiosk->id)
+                    ->update(['status' => $ticketStatus]);
+
+                \Log::info('Ticket rows updated', ['count' => $updated]);
+            }
+        }
 
         activity_log(
             'Barangay Clearance Status Updated',
@@ -303,9 +319,9 @@ class BarangayClearanceController extends Controller
         );
 
         return response()->json([
-            "status" => "success",
-            "message" => "Barangay clearance status updated",
-            "data" => $record
+            'status'  => 'success',
+            'message' => 'Barangay clearance status updated',
+            'data'    => $record,
         ], 200);
     }
 

@@ -30,7 +30,7 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\ServicePriceController;
 use App\Http\Controllers\ReleaseDocumentController;
 use App\Http\Controllers\DashboardController;
-
+use App\Http\Controllers\TicketController;
 
 // Public routes
 Route::post('/login', [AuthController::class, 'supabaseLogin']);
@@ -192,6 +192,50 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
 
     Route::get('/service-prices', [ServicePriceController::class, 'index']);
     Route::put('/service-prices/{type}', [ServicePriceController::class, 'update']);
+
+    Route::prefix('tickets')->group(function () {
+
+        // =========================
+        // QUEUE CORE
+        // =========================
+
+        Route::post('/', [TicketController::class, 'store']); // kiosk/manual create
+        Route::get('/pending', [TicketController::class, 'pending']); // today queue
+        Route::get('/now-serving', [TicketController::class, 'nowServing']); // active queue
+
+        // =========================
+        // QUEUE ACTIONS
+        // =========================
+
+        Route::post('/call-next', [TicketController::class, 'callNext']); // NEXT TICKET
+
+        Route::patch('/{ticket}/status', [TicketController::class, 'updateStatus']);
+
+        Route::post('/{ticket}/move-back', [TicketController::class, 'moveBack']); 
+        // 👆 manual go back (optional but useful)
+
+        Route::post('/{ticket}/requeue-late', [TicketController::class, 'requeueLate']); 
+        // 👆 late user re-admission
+
+        // =========================
+        // LOOKUP / DETAILS
+        // =========================
+
+        Route::get('/{ticket}', [TicketController::class, 'show']);
+
+        Route::post('/find/{ticketNumber}', [
+            TicketController::class,
+            'findByTicketNumberAndUpdateStatus'
+        ]);
+
+        // =========================
+        // SUPPORTING FEATURES
+        // =========================
+
+        Route::get('/late', [TicketController::class, 'lateTickets']);
+
+        Route::post('/{ticket}/remarks', [TicketController::class, 'addRemark']);
+    });
 
 
     Route::get('/check-shell', function() {

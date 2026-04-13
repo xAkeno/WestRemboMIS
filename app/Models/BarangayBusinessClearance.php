@@ -20,6 +20,7 @@ class BarangayBusinessClearance extends Model
         'middle_name',
         'ext_name',
         'business_name',
+        'requester_type',
         'business_type',
         'business_details',
         'capital',

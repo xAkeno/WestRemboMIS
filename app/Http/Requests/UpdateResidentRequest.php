@@ -60,7 +60,7 @@ class UpdateResidentRequest extends FormRequest
             'email_address' => 'nullable|email|max:150',
             'notes' => 'nullable|string|max:1000',
             'photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED',   
+            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',   
         ];
     }
 }

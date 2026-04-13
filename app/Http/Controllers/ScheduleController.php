@@ -7,8 +7,13 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Traits\ExtractsUserFromAuthToken;
 use App\Models\ActivityLogger;
+use App\Services\TicketService;
 class ScheduleController extends Controller
 {
+    public function __construct(TicketService $ticketService)
+    {
+        $this->ticketService = $ticketService;
+    }
     use ExtractsUserFromAuthToken;
 
     // 🟢 Dynamic available slots based on document type
@@ -26,9 +31,11 @@ class ScheduleController extends Controller
 
         $slots = $slotsConfig[$type] ?? [];
 
+        // Normalize taken times so "08:00:00" matches "08:00" in the diff
         $taken = Schedule::where('document_type', $type)
             ->where('schedule_date', $date)
             ->pluck('schedule_time')
+            ->map(fn ($t) => $this->normalizeTime($t))
             ->toArray();
 
         $available = array_values(array_diff($slots, $taken));
@@ -53,7 +60,11 @@ class ScheduleController extends Controller
             'schedule_time'   => 'required',
         ]);
 
-        // Prevent duplicate schedule for the same document
+        // Normalize time
+        $normalizedTime = $this->normalizeTime($request->schedule_time);
+        $request->merge(['schedule_time' => $normalizedTime]);
+
+        // Prevent duplicate schedule for same document
         $alreadyScheduled = Schedule::where('document_number', $request->document_number)->exists();
         if ($alreadyScheduled) {
             return response()->json([
@@ -65,7 +76,7 @@ class ScheduleController extends Controller
         // Prevent slot conflict
         $slotTaken = Schedule::where('document_type', $request->document_type)
             ->where('schedule_date', $request->schedule_date)
-            ->where('schedule_time', $request->schedule_time)
+            ->where('schedule_time', $normalizedTime)
             ->exists();
 
         if ($slotTaken) {
@@ -75,7 +86,15 @@ class ScheduleController extends Controller
             ], 422);
         }
 
+        // ✅ CREATE SCHEDULE
         $schedule = Schedule::create($request->all());
+
+        // 🔥 CREATE TICKET FOR THIS SCHEDULE (THIS IS THE MISSING PART)
+        $ticket = $this->ticketService->createTicketForSchedule(
+            $schedule,
+            $request->document_type,
+            $userId
+        );
 
         activity_log(
             'Schedule Created',
@@ -83,13 +102,21 @@ class ScheduleController extends Controller
             "User #{$userId} created a schedule for document '{$request->document_number}' ({$request->document_type})"
         );
 
-        // ✅ Update the related document's status to SCHEDULED
-        $this->updateDocumentStatus($request->document_type, $request->document_number, 'SCHEDULED');
+        // ✅ Update related document status
+        $this->updateDocumentStatus(
+            $request->document_type,
+            $request->document_number,
+            'SCHEDULED'
+        );
 
         return response()->json([
-            'status' => 'success',
-            'data'   => $schedule,
-        ]);
+            'status'   => 'success',
+            'message'  => 'Schedule created successfully',
+            'data'     => [
+                'schedule' => $schedule,
+                'ticket'   => $ticket, // 👈 include this for debugging/frontend
+            ],
+        ], 201);
     }
 
     // 🟢 View all schedules
@@ -104,11 +131,11 @@ class ScheduleController extends Controller
         $type = $request->document_type;
 
         $data = match ($type) {
-            'barangay_clearance' => \App\Models\BarangayClearance::where('status', 'pending')->pluck('bcert_number'),
-            'business_clearance' => \App\Models\BarangayBusinessClearance::where('status', 'pending')->pluck('brgy_business_no'),
-            'building_clearance' => \App\Models\BarangayBuildingClearance::where('status', 'pending')->pluck('bcert_number'),
+            'barangay_clearance'   => \App\Models\BarangayClearance::where('status', 'pending')->pluck('bcert_number'),
+            'business_clearance'   => \App\Models\BarangayBusinessClearance::where('status', 'pending')->pluck('brgy_business_no'),
+            'building_clearance'   => \App\Models\BarangayBuildingClearance::where('status', 'pending')->pluck('bcert_number'),
             'barangay_certificate' => \App\Models\BarangayCertificate::where('status', 'pending')->pluck('bcert_number'),
-            default              => collect([]),
+            default                => collect([]),
         };
 
         return response()->json(['data' => $data]);
@@ -142,6 +169,10 @@ class ScheduleController extends Controller
             'schedule_time' => 'required',
         ]);
 
+        // FIX: normalize incoming time before any comparison or storage
+        $normalizedTime = $this->normalizeTime($request->schedule_time);
+        $request->merge(['schedule_time' => $normalizedTime]);
+
         // Find existing schedule — admins bypass the user_id check
         $schedule = Schedule::where('document_number', $documentNumber)->first();
 
@@ -155,7 +186,7 @@ class ScheduleController extends Controller
         // Prevent slot conflict (ignore current record)
         $slotTaken = Schedule::where('document_type', $schedule->document_type)
             ->where('schedule_date', $request->schedule_date)
-            ->where('schedule_time', $request->schedule_time)
+            ->where('schedule_time', $normalizedTime)
             ->where('id', '!=', $schedule->id)
             ->exists();
 
@@ -168,7 +199,7 @@ class ScheduleController extends Controller
 
         $schedule->update([
             'schedule_date' => $request->schedule_date,
-            'schedule_time' => $request->schedule_time,
+            'schedule_time' => $normalizedTime,
         ]);
 
         // ✅ Ensure status stays SCHEDULED after a reschedule too
@@ -177,7 +208,7 @@ class ScheduleController extends Controller
         activity_log(
             'Schedule Rescheduled',
             'update',
-            "User #{$userId} rescheduled document '{$documentNumber}' to {$request->schedule_date} {$request->schedule_time}"
+            "User #{$userId} rescheduled document '{$documentNumber}' to {$request->schedule_date} {$normalizedTime}"
         );
 
         return response()->json([
@@ -208,5 +239,26 @@ class ScheduleController extends Controller
 
         $modelClass::where($numberColumn, $documentNumber)
             ->update(['status' => $status]);
+    }
+
+    // ─── Private helper — strips seconds so "08:00:00" and "08:00" compare equal ──
+    private function normalizeTime(string $time): string
+    {
+        // Already H:i — return as-is
+        if (preg_match('/^\d{2}:\d{2}$/', $time)) {
+            return $time;
+        }
+
+        // H:i:s — strip the seconds
+        if (preg_match('/^(\d{2}:\d{2}):\d{2}$/', $time, $m)) {
+            return $m[1];
+        }
+
+        // Anything else — let Carbon parse and reformat
+        try {
+            return \Carbon\Carbon::parse($time)->format('H:i');
+        } catch (\Exception $e) {
+            return $time; // return raw; validation will catch truly invalid values
+        }
     }
 }

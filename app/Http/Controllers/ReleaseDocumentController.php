@@ -84,11 +84,26 @@ class ReleaseDocumentController extends Controller
             );
 
             // Update the record
+            // Update the record
             $record->update([
                 'status'                 => 'released',
                 'released_document_path' => $s3Path,
                 'released_at'            => now(),
             ]);
+
+            // Sync linked ticket to Released
+            if ($documentType === 'barangay-clearances') {
+                $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
+                    ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
+                    ->whereRaw('LOWER(last_name) = ?', [strtolower($record->surname)])
+                    ->first();
+
+                if ($kiosk) {
+                    \App\Models\Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                        ->where('serviceable_id', $kiosk->id)
+                        ->update(['status' => 'Released']);
+                }
+            }
 
             return response()->json([
                 'status'  => 'success',

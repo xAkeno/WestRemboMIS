@@ -16,6 +16,7 @@
             'middle_name',
             'surname',
             'extension',
+            'requester_type',
             'house_block_lot_no',
             'street',
             'zone',

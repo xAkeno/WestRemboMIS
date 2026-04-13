@@ -19,6 +19,7 @@ class BarangayBuildingClearance extends Model
         'first_name',
         'middle_name',
         'ext_name',
+        'requester_type',
         'establishment',
         'house_block_lot_no',
         'street',

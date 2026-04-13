@@ -13,9 +13,22 @@ class Ticket extends Model
         'ticket_number',
         'service_type',
         'requester_id',
+
         'status',
         'priority',
         'submitted_at',
+
+        // 🔥 REQUIRED FOR QUEUE SYSTEM
+        'type',
+        'position',
+        'queue_date',
+        'scheduled_time',
+        'called_at',
+        'missed_attempts',
+        'schedule_id',
+        'requeued_at',
+        'arrived_at',
+
         'serviceable_type',
         'serviceable_id',
         'processed_by',
@@ -25,17 +38,31 @@ class Ticket extends Model
         'released_at',
     ];
 
-    protected $dates = [
-        'submitted_at',
-        'in_progress_at',
-        'approved_at',
-        'rejected_at',
-        'released_at',
+    protected $casts = [
+        'submitted_at'   => 'datetime',
+        'queue_date'     => 'date',
+        'scheduled_time' => 'datetime:H:i',
+        'called_at'      => 'datetime',
+        'requeued_at'    => 'datetime',
+        'arrived_at'     => 'datetime',
     ];
 
     public function requester()
     {
         return $this->belongsTo(User::class, 'requester_id');
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saving(function ($ticket) {
+            if (!empty($ticket->service_type)) {
+                $ticket->service_type = ucwords(
+                    str_replace('_', ' ', strtolower($ticket->service_type))
+                );
+            }
+        });
     }
 
     public function processor()

@@ -16,6 +16,7 @@ class BarangayClearance extends Model
         'prefix',
         'surname',
         'first_name',
+        'requester_type',
         'middle_name',
         'ext_name',
         'house_block_lot_no',

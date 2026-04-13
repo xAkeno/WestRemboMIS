@@ -45,7 +45,7 @@ class DashboardController extends Controller
 
         // ── Ticket Queue (Pending tickets sorted) ───────────────────
         $tickets = Ticket::with('serviceable')
-            ->whereIn('status', ['Pending', 'Encoded'])
+            ->whereIn('status', ['Pending', 'Encoded', 'called', 'waiting', 'processing', 'late'])
             ->orderByRaw("FIELD(status, 'Pending', 'Encoded')")
             ->orderByRaw("FIELD(priority, 'High', 'Normal', 'Low')")
             ->orderBy('submitted_at', 'asc')
