@@ -264,12 +264,12 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
  
     });
 
-    Route::post('/backup/full', [BackupController::class, 'runFullBackup']);
     Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
-    Route::post('/backup/files', [BackupController::class, 'runImagesBackup']);
-
     Route::get('/backup', [BackupController::class, 'listBackups']);
-    Route::get('/backup/{id}/download', [BackupController::class, 'downloadBackup']);
+    Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
+
+    Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
+    Route::post('/backup/restore-upload', [BackupController::class, 'restoreUpload']);
 
     Route::get('/documents', [DocumentController::class, 'index']);
     Route::post('/documents/{document}', [DocumentController::class, 'update']);
