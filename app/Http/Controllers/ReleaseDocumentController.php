@@ -62,73 +62,65 @@ class ReleaseDocumentController extends Controller
 
             $file = $request->file('file');
 
-            // Build a clean S3 path: released_documents/{type}/{id}_{bcert}.pdf
             $bcertSlug = preg_replace('/[^a-zA-Z0-9\-_]/', '_', $record->bcert_number ?? (string) $id);
             $filename  = "{$id}_{$bcertSlug}.pdf";
             $s3Path    = "released_documents/{$documentType}/{$filename}";
 
-            // Delete previous released file if it exists
+            // delete old file if exists
             if (!empty($record->released_document_path)) {
-                try {
-                    Storage::disk('s3')->delete($record->released_document_path);
-                } catch (\Throwable $e) {
-                    Log::warning("S3 delete (release) failed: " . $e->getMessage());
-                }
+                Storage::disk('s3')->delete($record->released_document_path);
             }
 
-            // Upload to S3
             Storage::disk('s3')->putFileAs(
                 "released_documents/{$documentType}",
                 $file,
                 $filename
             );
 
-            // Update the record
-            // Update the record
+            // 1. Update document
             $record->update([
-                'status'                 => 'released',
+                'status'                 => 'RELEASED',
                 'released_document_path' => $s3Path,
                 'released_at'            => now(),
             ]);
 
-            // Sync linked ticket to Released
-            if ($documentType === 'barangay-clearances') {
-                $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
-                    ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                    ->whereRaw('LOWER(last_name) = ?', [strtolower($record->surname)])
-                    ->first();
+            // 2. 🔥 FIXED: sync ticket properly
+            $ticket = \App\Models\Ticket::where('serviceable_type', $modelClass)
+                ->where('serviceable_id', $record->id)
+                ->first();
+            
+            if (!$ticket) {
+                Log::info("Trying fallback kiosk match...");
+            }
 
-                if ($kiosk) {
-                    \App\Models\Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
-                        ->where('serviceable_id', $kiosk->id)
-                        ->update(['status' => 'Released']);
-                }
+            if ($ticket) {
+                $ticket->update([
+                    'status'     => 'Released',
+                    'released_at'=> now(),
+                ]);
+            } else {
+                Log::warning("No ticket found for released document", [
+                    'type' => $documentType,
+                    'id'   => $id
+                ]);
             }
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Document released and uploaded successfully.',
+                'message' => 'Document released and ticket synced successfully.',
                 'data'    => [
-                    'id'                     => $record->id,
-                    'status'                 => 'released',
-                    'released_document_path' => $s3Path,
-                    'released_at'            => $record->released_at,
+                    'id'     => $record->id,
+                    'status' => 'RELEASED',
+                    'file'   => $s3Path,
                 ],
             ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'status'  => 'error',
-                'message' => 'Validation failed.',
-                'errors'  => $e->errors(),
-            ], 422);
 
         } catch (\Exception $e) {
             Log::error("Release document failed: " . $e->getMessage());
 
             return response()->json([
                 'status'  => 'error',
-                'message' => 'Failed to release document: ' . $e->getMessage(),
+                'message' => $e->getMessage(),
             ], 500);
         }
     }

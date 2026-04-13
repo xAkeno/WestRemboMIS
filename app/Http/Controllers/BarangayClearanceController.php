@@ -285,7 +285,7 @@ class BarangayClearanceController extends Controller
         $ticketStatusMap = [
             'PENDING'  => 'Pending',
             'ENCODED'  => 'Processing',
-            'RELEASED' => 'Released',
+            'RELEASED' => 'Released',   
         ];
 
         // Uppercase before map lookup so "released" and "RELEASED" both match
