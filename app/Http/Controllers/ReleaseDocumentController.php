@@ -15,8 +15,8 @@ class ReleaseDocumentController extends Controller
     private const MODEL_MAP = [
         'barangay-certificates' => \App\Models\BarangayCertificate::class,
         'barangay-clearances'   => \App\Models\BarangayClearance::class,
-        'building-clearances'   => \App\Models\BuildingClearance::class,
-        'business-clearances'   => \App\Models\BusinessClearance::class,
+        'building-clearances'   => \App\Models\BarangayBuildingClearance::class,
+        'business-clearances'   => \App\Models\BarangayBusinessClearance::class,
     ];
 
     /**
