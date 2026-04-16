@@ -236,9 +236,29 @@ class BarangayBuildingClearanceController extends Controller
     public function update(UpdateBarangayBuildingClearanceRequest $request, BarangayBuildingClearance $building_clearance)
     {
         $data = $request->validated();
+
         $building_clearance->update($data);
 
-        activity_log('Building Clearance Updated', 'update', 'Updated #: ' . $building_clearance->bcert_number);
+        activity_log(
+            'Building Clearance Updated',
+            'update',
+            'Updated #: ' . $building_clearance->bcert_number
+        );
+
+        // ✅ Notify user about update
+        $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($building_clearance->first_name)])
+            ->whereRaw('LOWER(surname) = ?', [strtolower($building_clearance->surname)])
+            ->first();
+
+        if ($user) {
+            \App\Models\Notification::create([
+                'user_id'      => $user->id,
+                'title'        => 'Building Clearance Updated',
+                'message'      => 'Your Building Clearance has been updated. (Ref #: ' . $building_clearance->bcert_number . ')',
+                'type'         => 'building_clearance',
+                'reference_id' => $building_clearance->id,
+            ]);
+        }
 
         return response()->json([
             'status'  => 'success',
@@ -258,6 +278,38 @@ class BarangayBuildingClearanceController extends Controller
         if ($validated['status'] === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
             $record->expires_at  = now()->addMonths(12); // Building clearance keeps 12 months
+        }
+
+        // --- Status label map ---
+        $statusLabels = [
+            'PENDING'    => ['label' => 'Pending',    'message' => 'Your Building Clearance application is now pending review.'],
+            'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Building Clearance application has been encoded.'],
+            'INCOMPLETE' => ['label' => 'Incomplete', 'message' => 'Your Building Clearance application is incomplete.'],
+            'REJECTED'   => ['label' => 'Rejected',   'message' => 'Your Building Clearance application was rejected.'],
+            'RELEASED'   => ['label' => 'Released',   'message' => 'Your Building Clearance is ready for release.'],
+            'SCHEDULED'  => ['label' => 'Scheduled',  'message' => 'Your Building Clearance has been scheduled.'],
+            'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Building Clearance has expired.'],
+            'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Building Clearance.'],
+            'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Building Clearance is ready for payment.'],
+        ];
+
+        $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
+
+        if ($statusInfo) {
+            // 🔥 FIX: use surname instead of last_name
+            $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
+                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
+                ->first();
+
+            if ($user) {
+                \App\Models\Notification::create([
+                    'user_id'      => $user->id,
+                    'title'        => 'Building Clearance — ' . $statusInfo['label'],
+                    'message'      => $statusInfo['message'] . ' (Ref #: ' . $record->bcert_number . ')',
+                    'type'         => 'building_clearance',
+                    'reference_id' => $record->id,
+                ]);
+            }
         }
 
         $record->status = strtoupper($validated['status']);

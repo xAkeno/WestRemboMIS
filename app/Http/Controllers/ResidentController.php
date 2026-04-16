@@ -190,16 +190,57 @@ class ResidentController extends Controller
     {
         $data = $request->validated();
 
+        $oldData = $resident->toArray();
+
+        // Handle photo update
         if ($request->hasFile('photo')) {
             if ($resident->photo) {
                 Storage::disk('public')->delete($resident->photo);
             }
+
             $data['photo'] = $request->file('photo')->store('residents/photos', 'public');
         }
 
         $resident->update($data);
 
-        activity_log('Resident Updated', 'update', 'Updated Resident #: ' . $resident->resident_id);
+        // =========================
+        // 🔔 NOTIFICATION / ACTIVITY LOG
+        // =========================
+        activity_log(
+            'Resident Updated',
+            'update',
+            'Resident #' . $resident->resident_id . ' was updated'
+        );
+
+        // =========================
+        // 🔔 OPTIONAL: TRACK IMPORTANT CHANGES
+        // =========================
+        $changes = array_diff_assoc($data, $oldData);
+
+        if (!empty($changes)) {
+            activity_log(
+                'Resident Data Changed',
+                'update_details',
+                'Changes detected for Resident #' . $resident->resident_id
+            );
+        }
+
+        // =========================
+        // 🔔 OPTIONAL: SYNC TICKET IF NAME CHANGED
+        // =========================
+        if (isset($data['first_name']) || isset($data['surname'])) {
+
+            $kiosk = \App\Models\Kiosk::where('service_type', 'Resident Registration')
+                ->whereRaw('LOWER(first_name) = LOWER(?)', [$data['first_name'] ?? $resident->first_name])
+                ->whereRaw('LOWER(surname) = LOWER(?)', [$data['surname'] ?? $resident->surname])
+                ->first();
+
+            if ($kiosk) {
+                Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                    ->where('serviceable_id', $kiosk->id)
+                    ->update(['status' => 'called']);
+            }
+        }
 
         return response()->json([
             'status'  => 'success',
@@ -216,7 +257,10 @@ class ResidentController extends Controller
 
         $record = Resident::findOrFail($id);
 
-        $record->status = strtoupper($validated['status']);
+        $oldStatus = $record->status;
+        $newStatus = strtoupper($validated['status']);
+
+        $record->status = $newStatus;
         $record->touch();
         $record->save();
 
@@ -227,33 +271,42 @@ class ResidentController extends Controller
             'RELEASED' => 'released',
         ];
 
-        $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
+        $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
 
         if ($ticketStatus) {
-            $kiosk = \App\Models\Kiosk::where('service_type', 'Resident Registration')
-                ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
-                ->first();
 
-            \Log::info('Kiosk lookup for status update', [
-                'first_name' => $record->first_name,
-                'surname'    => $record->surname,
-                'kiosk_id'   => $kiosk?->id,
-            ]);
+            // FIXED KIOSK LOOKUP (surname only)
+            $kiosk = \App\Models\Kiosk::where('service_type', 'Resident Registration')
+                ->whereRaw('LOWER(first_name) = LOWER(?)', [$record->first_name])
+                ->whereRaw('LOWER(surname) = LOWER(?)', [$record->surname])
+                ->first();
 
             if ($kiosk) {
                 $updated = Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
                     ->where('serviceable_id', $kiosk->id)
                     ->update(['status' => $ticketStatus]);
 
-                \Log::info('Ticket rows updated', ['count' => $updated]);
+                \Log::info('Ticket updated for resident', [
+                    'resident_id' => $record->resident_id,
+                    'ticket_status' => $ticketStatus,
+                    'updated_rows' => $updated,
+                ]);
+
+                // =========================
+                // 🔔 NOTIFICATION LOGIC HERE
+                // =========================
+                activity_log(
+                    'Resident Status Notification',
+                    'notification',
+                    "Resident {$record->resident_id} status changed from {$oldStatus} to {$newStatus}"
+                );
             }
         }
 
         activity_log(
             'Resident Status Updated',
             'status_update',
-            'Changed to ' . $validated['status'] . ' (Resident #: ' . $record->resident_id . ')'
+            'Changed to ' . $newStatus . ' (Resident #: ' . $record->resident_id . ')'
         );
 
         return response()->json([

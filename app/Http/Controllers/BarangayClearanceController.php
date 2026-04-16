@@ -226,7 +226,45 @@ class BarangayClearanceController extends Controller
     public function update(UpdateBarangayClearanceRequest $request, BarangayClearance $barangayClearance)
     {
         $data = $request->validated();
+
         $barangayClearance->update($data);
+
+        // --- Detect if status changed ---
+        if (isset($data['status'])) {
+
+            $status = strtoupper($data['status']);
+
+            $statusLabels = [
+                'PENDING'    => ['label' => 'Pending',    'message' => 'Your Barangay Clearance application is now pending review.'],
+                'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Barangay Clearance application has been encoded into the system.'],
+                'INCOMPLETE' => ['label' => 'Incomplete', 'message' => 'Your Barangay Clearance application is incomplete. Please submit the missing requirements.'],
+                'REJECTED'   => ['label' => 'Rejected',   'message' => 'Your Barangay Clearance application has been rejected. Please visit the barangay for more details.'],
+                'RELEASED'   => ['label' => 'Released',   'message' => 'Your Barangay Clearance is ready for release. Please claim it at the barangay office.'],
+                'SCHEDULED'  => ['label' => 'Scheduled',  'message' => 'Your Barangay Clearance has been scheduled. Please check your appointment details.'],
+                'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Barangay Clearance has expired. Please apply for a renewal.'],
+                'PAID'       => ['label' => 'Paid',       'message' => 'Payment for your Barangay Clearance has been confirmed.'],
+                'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
+            ];
+
+            $statusInfo = $statusLabels[$status] ?? null;
+
+            if ($statusInfo) {
+                // Find user (same logic as your status method)
+                $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
+                    ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
+                    ->first();
+
+                if ($user) {
+                    \App\Models\Notification::create([
+                        'user_id'      => $user->id,
+                        'title'        => 'Barangay Clearance — ' . $statusInfo['label'],
+                        'message'      => $statusInfo['message'] . ' (Ref #: ' . $barangayClearance->bcert_number . ')',
+                        'type'         => 'clearance',
+                        'reference_id' => $barangayClearance->id,
+                    ]);
+                }
+            }
+        }
 
         activity_log('Barangay Clearance Updated', 'update', 'Updated #: ' . $barangayClearance->bcert_number);
 
@@ -248,6 +286,39 @@ class BarangayClearanceController extends Controller
         if ($validated['status'] === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
             $record->expires_at  = now()->addMonths(6);
+        }
+
+        // --- Status label map for readable notification messages ---
+        $statusLabels = [
+            'PENDING'    => ['label' => 'Pending',    'message' => 'Your Barangay Clearance application is now pending review.'],
+            'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Barangay Clearance application has been encoded into the system.'],
+            'INCOMPLETE' => ['label' => 'Incomplete', 'message' => 'Your Barangay Clearance application is incomplete. Please submit the missing requirements.'],
+            'REJECTED'   => ['label' => 'Rejected',   'message' => 'Your Barangay Clearance application has been rejected. Please visit the barangay for more details.'],
+            'RELEASED'   => ['label' => 'Released',   'message' => 'Your Barangay Clearance is ready for release. Please claim it at the barangay office.'],
+            'SCHEDULED'  => ['label' => 'Scheduled',  'message' => 'Your Barangay Clearance has been scheduled. Please check your appointment details.'],
+            'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Barangay Clearance has expired. Please apply for a renewal.'],
+            'PAID'       => ['label' => 'Paid',       'message' => 'Payment for your Barangay Clearance has been confirmed.'],
+            'TO_PAY'     => ['label' => 'For Payment', 'message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
+        ];
+
+        // --- Send in-app notification to the owner ---
+        $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
+
+        if ($statusInfo) {
+            // Match by first_name + surname to find the user account
+            $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
+                ->whereRaw('LOWER(last_name) = ?', [strtolower($record->surname)])
+                ->first();
+
+            if ($user) {
+                \App\Models\Notification::create([
+                    'user_id'      => $user->id,
+                    'title'        => 'Barangay Clearance — ' . $statusInfo['label'],
+                    'message'      => $statusInfo['message'] . ' (Ref #: ' . $record->bcert_number . ')',
+                    'type'         => 'clearance',
+                    'reference_id' => $record->id,
+                ]);
+            }
         }
 
         $record->status = strtoupper($validated['status']);

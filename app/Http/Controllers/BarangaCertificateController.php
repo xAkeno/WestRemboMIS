@@ -230,7 +230,26 @@ class BarangaCertificateController extends Controller
         $data = $request->validated();
         $barangayCertificate->update($data);
 
-        activity_log('Barangay Certificate Updated', 'update', 'Updated BCERT #: ' . $barangayCertificate->bcert_number);
+        activity_log(
+            'Barangay Certificate Updated',
+            'update',
+            'Updated BCERT #: ' . $barangayCertificate->bcert_number
+        );
+
+        // ✅ Notify user
+        $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($barangayCertificate->first_name)])
+            ->whereRaw('LOWER(surname) = ?', [strtolower($barangayCertificate->surname)])
+            ->first();
+
+        if ($user) {
+            \App\Models\Notification::create([
+                'user_id'      => $user->id,
+                'title'        => 'Barangay Certificate Updated',
+                'message'      => 'Your Barangay Certificate has been updated. (Ref #: ' . $barangayCertificate->bcert_number . ')',
+                'type'         => 'certificate',
+                'reference_id' => $barangayCertificate->id,
+            ]);
+        }
 
         return response()->json([
             'status'  => 'success',
@@ -250,6 +269,37 @@ class BarangaCertificateController extends Controller
         if ($validated['status'] === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
             $record->expires_at  = now()->addMonths(6);
+        }
+
+        // --- Status labels ---
+        $statusLabels = [
+            'PENDING'    => ['label' => 'Pending',    'message' => 'Your Barangay Certificate is now pending review.'],
+            'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Barangay Certificate has been encoded.'],
+            'INCOMPLETE' => ['label' => 'Incomplete', 'message' => 'Your Barangay Certificate is incomplete.'],
+            'REJECTED'   => ['label' => 'Rejected',   'message' => 'Your Barangay Certificate has been rejected.'],
+            'RELEASED'   => ['label' => 'Released',   'message' => 'Your Barangay Certificate is ready for release.'],
+            'SCHEDULED'  => ['label' => 'Scheduled',  'message' => 'Your Barangay Certificate has been scheduled.'],
+            'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Barangay Certificate has expired.'],
+            'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Barangay Certificate.'],
+            'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Certificate is ready for payment.'],
+        ];
+
+        $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
+
+        if ($statusInfo) {
+            $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
+                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
+                ->first();
+
+            if ($user) {
+                \App\Models\Notification::create([
+                    'user_id'      => $user->id,
+                    'title'        => 'Barangay Certificate — ' . $statusInfo['label'],
+                    'message'      => $statusInfo['message'] . ' (Ref #: ' . $record->bcert_number . ')',
+                    'type'         => 'certificate',
+                    'reference_id' => $record->id,
+                ]);
+            }
         }
 
         $record->status = strtoupper($validated['status']);

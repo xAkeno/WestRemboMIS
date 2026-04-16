@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Mail\NewEventNotification;
 use Illuminate\Support\Facades\Mail;
 use App\Models\User;
+use App\Models\Notification;
 class EventController extends Controller
 {
     // Admin view: return all events
@@ -70,7 +71,17 @@ class EventController extends Controller
 
         $users = User::all(); // or filter only active users
         foreach ($users as $user) {
+            // Email
             Mail::to($user->email)->queue(new NewEventNotification($event));
+
+            // In-app notification
+            Notification::create([
+                'user_id'      => $user->id,
+                'title'        => 'New Event: ' . $event->title,
+                'message'      => 'A new event has been scheduled on ' . $event->date . ' at ' . $event->location . '.',
+                'type'         => 'event',
+                'reference_id' => $event->id,
+            ]);
         }
 
         return response()->json(['status' => true, 'data' => $event], 201);

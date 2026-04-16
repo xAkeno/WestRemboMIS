@@ -32,6 +32,7 @@ use App\Http\Controllers\ReleaseDocumentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\SettingController;
+use App\Http\Controllers\NotificationController;
 // Public routes
 Route::post('/login', [AuthController::class, 'supabaseLogin']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -154,7 +155,9 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::post('/tickets/{ticket}/remarks', [\App\Http\Controllers\TicketController::class, 'addRemark']);
     Route::post('/tickets/update-by-service/{ticketNumber}', [\App\Http\Controllers\TicketController::class, 'findByTicketNumberAndUpdateStatus']);
 
-    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::patch('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+    Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
 
     Route::get('/my-all-requests', [MyAllRequestsController::class, 'index']);
     // Route::get('/my-all-requests/{id}', [MyAllRequestsController::class, 'show']);
