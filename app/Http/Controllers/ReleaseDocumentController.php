@@ -66,6 +66,11 @@ class ReleaseDocumentController extends Controller
                 'status'                 => 'RELEASED',
                 'released_document_path' => $s3Path,
                 'released_at'            => now(),
+
+                // ✅ AUTO FILL ISSUANCE DATA
+                'issued_date' => $record->issued_date ?? now(),
+                'issued_at'   => $record->issued_at ?? 'Barangay Hall',
+                'issued_on'   => $record->issued_on ?? now()
             ]);
 
             // 1. Try direct relation match first (schedule/system-generated)

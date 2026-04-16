@@ -238,6 +238,10 @@ class BarangayBusinessClearanceController extends Controller
      */
     public function update(UpdateBarangayBusinessClearanceRequest $request, $id)
     {
+        \Log::info('Update payload', [
+        'all'       => $request->all(),
+        'validated' => $request->validated(),
+    ]);
         $barangayBusinessClearance = BarangayBusinessClearance::findOrFail($id);
         $data = $request->validated();
         $barangayBusinessClearance->update($data);
