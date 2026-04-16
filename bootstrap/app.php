@@ -23,7 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 EnsureFrontendRequestsAreStateful::class,
             ]);
 
-        $middleware->throttleApi();
+        // $middleware->throttleApi();
 
         // Exclude API routes from CSRF verification
         $middleware->validateCsrfTokens(except: [
