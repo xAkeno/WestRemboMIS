@@ -19,9 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         // API routes: Bearer token authentication with Sanctum
-        $middleware->api(prepend: [
-            EnsureFrontendRequestsAreStateful::class,
-        ]);
+            $middleware->api(prepend: [
+                EnsureFrontendRequestsAreStateful::class,
+            ]);
 
         $middleware->throttleApi();
 
@@ -44,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'auth' => \App\Http\Middleware\Authenticate::class,
             'verified' => \App\Http\Middleware\EnsureEmailIsVerified::class,
+            'maintenance' => \App\Http\Middleware\MaintenanceMode::class,
         ]);
     })
     ->withExceptions(function ($exceptions) {

@@ -31,7 +31,7 @@ use App\Http\Controllers\ServicePriceController;
 use App\Http\Controllers\ReleaseDocumentController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TicketController;
-
+use App\Http\Controllers\SettingController;
 // Public routes
 Route::post('/login', [AuthController::class, 'supabaseLogin']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -79,7 +79,10 @@ Route::middleware('verified')->get('/dashboard', function() {
 // });
 
 // All routes - no authentication required
-    Route::apiResource('barangay-certificates', BarangaCertificateController::class);
+Route::apiResource('barangay-certificates', BarangaCertificateController::class);
+Route::get('settings/', [SettingController::class, 'index']);
+
+
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
 
     Route::get('/create-collection', function () {
@@ -90,6 +93,10 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
             ]
         ]);
         return $response->json();
+    });
+    Route::prefix('settings')->group(function () {
+        Route::get('/{key}', [SettingController::class, 'show']);
+        Route::post('/update', [SettingController::class, 'update']);
     });
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/test-embedding', [AIController::class, 'embedTest']);
@@ -272,6 +279,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
     Route::post('/backup/restore-upload', [BackupController::class, 'restoreUpload']);
     Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
+    
     Route::get('/documents', [DocumentController::class, 'index']);
     Route::post('/documents/{document}', [DocumentController::class, 'update']);
     Route::post('/documents', [DocumentController::class, 'store']);
