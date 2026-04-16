@@ -33,7 +33,7 @@ class BarangaCertificateController extends Controller
         $columns = [
             'bcert_number',
             'prefix',
-            'firstname',
+            'first_name',
             'middle_name',
             'surname',
             'extension',
@@ -52,7 +52,7 @@ class BarangaCertificateController extends Controller
                     $q->orWhere($col, 'like', "%{$search}%");
                 }
                 $q->orWhereRaw(
-                    "CONCAT_WS(' ', firstname, middle_name, surname) LIKE ?",
+                    "CONCAT_WS(' ', first_name, middle_name, surname) LIKE ?",
                     ["%{$search}%"]
                 );
             });
@@ -102,7 +102,7 @@ class BarangaCertificateController extends Controller
 
         $sortField     = Str::snake($request->get('sortField', 'created_at'));
         $sortDirection = $request->get('sortDirection', 'desc');
-        $allowedSorts  = ['created_at', 'surname', 'firstname', 'bcert_number', 'zone', 'status'];
+        $allowedSorts  = ['created_at', 'surname', 'first_name', 'bcert_number', 'zone', 'status'];
 
         if (! in_array($sortField, $allowedSorts)) {
             $sortField = 'created_at';
@@ -175,6 +175,7 @@ class BarangaCertificateController extends Controller
         $newRecord       = 'BCERT-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
         $data                 = $request->validated();
+        
         $data['bcert_number'] = $newRecord;
         $data['status']       = 'ENCODED';
         $data['created_by']   = $this->getUserIdFromAuthToken();
@@ -187,7 +188,7 @@ class BarangaCertificateController extends Controller
         // FIX: Kiosk stores the field as `surname`, not `last_name`
         // Note: BarangayCertificate uses `firstname` (no underscore), unlike other models
         $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Certificate')
-            ->whereRaw('LOWER(first_name) = ?', [strtolower($data['firstname'])])
+            ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
             ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
             ->first();
 
@@ -267,12 +268,12 @@ class BarangaCertificateController extends Controller
         if ($ticketStatus) {
             // Note: BarangayCertificate uses `firstname` (no underscore)
             $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Certificate')
-                ->whereRaw('LOWER(first_name) = ?', [strtolower($record->firstname)])
+                ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
                 ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
                 ->first();
 
             \Log::info('Kiosk lookup for status update', [
-                'firstname' => $record->firstname,
+                'first_name' => $record->first_name,
                 'surname'   => $record->surname,
                 'kiosk_id'  => $kiosk?->id,
             ]);
