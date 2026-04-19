@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('official_receipts', function (Blueprint $table) {
-            $table->id();
+            $table->id();   
             $table->string('or_number')->unique();
             $table->string('type'); // barangay_clearance, business_clearance, etc.
             $table->unsignedBigInteger('reference_id')->nullable(); // link to document

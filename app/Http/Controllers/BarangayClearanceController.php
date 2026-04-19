@@ -307,7 +307,7 @@ class BarangayClearanceController extends Controller
         if ($statusInfo) {
             // Match by first_name + surname to find the user account
             $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(last_name) = ?', [strtolower($record->surname)])
+                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
                 ->first();
 
             if ($user) {
