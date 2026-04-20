@@ -37,6 +37,8 @@
             'updated_by',
             'released_document_path',
             'released_at',
+            'document_hash',
+            'ipfs_cid',
         ];
         protected $casts = [
             'issued_date' => 'date',

@@ -128,6 +128,11 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
         [ReleaseDocumentController::class, 'download']
     );
 
+    Route::post(
+        'documents/verify',
+        [ReleaseDocumentController::class, 'verify']
+    );
+
     Route::get('/schedules', [ScheduleController::class, 'index']);
     Route::post('/schedules', [ScheduleController::class, 'store']);
     Route::get('/schedules/slots', [ScheduleController::class, 'getAvailableSlots']);
@@ -284,7 +289,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
     
     Route::get('/documents', [DocumentController::class, 'index']);
-    Route::post('/documents/{document}', [DocumentController::class, 'update']);
+    Route::post('/documents/update/{id}', [DocumentController::class, 'update']);
     Route::post('/documents', [DocumentController::class, 'store']);
     Route::get('/documents/single/{id}', [DocumentController::class, 'show']);
     Route::put('/documents/{id}/layout', [DocumentController::class, 'updateLayout']);

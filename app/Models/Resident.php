@@ -50,7 +50,9 @@ class Resident extends Model
         'status',
         'created_by',
         'updated_by',
-        'user_id'
+        'user_id',
+        'document_hash',
+        'ipfs_cid',
     ];
 
     protected $casts = [
