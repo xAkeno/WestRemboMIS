@@ -46,6 +46,7 @@ class StoreResidentRequest extends FormRequest
             'religion' => 'nullable|string|max:50',
             'voter_status' => 'nullable|string|max:20',
             'precinct_no' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255',
             'emp_status' => 'nullable|string|max:50',
             'occupation' => 'nullable|string|max:100',
             'position' => 'nullable|string|max:100',

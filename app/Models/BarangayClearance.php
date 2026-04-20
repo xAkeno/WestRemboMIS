@@ -43,6 +43,7 @@ class BarangayClearance extends Model
         'released_at',
         'document_hash',
         'ipfs_cid',
+        'email',
     ];
 
     protected $casts = [
@@ -54,6 +55,22 @@ class BarangayClearance extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function toApi()
+    {
+        return [
+            'id' => $this->id,
+            'bcert_number' => $this->bcert_number,
+            'first_name' => $this->first_name,
+            'surname' => $this->surname,
+            'pob' => $this->pob,
+            'dob' => $this->dob,
+            'contact_no' => $this->contact_no,
+            'street' => $this->street,
+            'zone' => $this->zone,
+            'status' => $this->status,
+        ];
     }
 
     public function schedule()

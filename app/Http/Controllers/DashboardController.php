@@ -123,20 +123,27 @@ class DashboardController extends Controller
 
         return response()->json([
             'data' => [
-                // Chart
+                // Chart (NO CHANGE)
                 'barangay_clearances'   => $barangayClearance->getData(),
                 'business_clearances'   => $businessClearance->getData(),
                 'building_clearances'   => $buildingClearance->getData(),
                 'barangay_certificates' => $barangayCertificate->getData(),
                 'residents'             => $residents->getData(),
 
-                // Sidebar + Dashboard extras
+                // FIXED DATA OUTPUT
                 'pending_counts'        => $pendingCounts,
                 'tickets'               => $tickets,
                 'now_serving'           => $nowServing,
                 'notifications'         => $notifications,
                 'latest_activities'     => $latestActivities,
                 'total_released_today'  => $totalReleasedToday,
+
+                // 🔥 FIX HERE (IMPORTANT)
+                'barangay_certificates_list' => \App\Models\BarangayCertificate::all()->map->toApi(),
+                'barangay_clearances_list'   => \App\Models\BarangayClearance::all()->map->toApi(),
+                'building_clearances_list'   => \App\Models\BarangayBuildingClearance::all()->map->toApi(),
+                'business_clearances_list'   => \App\Models\BarangayBusinessClearance::all()->map->toApi(),
+                'residents_list'             => \App\Models\Resident::all()->map->toApi(),
             ]
         ]);
     }

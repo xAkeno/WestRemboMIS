@@ -39,6 +39,7 @@
             'released_at',
             'document_hash',
             'ipfs_cid',
+            'email',
         ];
         protected $casts = [
             'issued_date' => 'date',
@@ -46,6 +47,25 @@
             'created_at' => 'date',
             'age' => 'integer',
         ];
+
+        public function toApi()
+        {
+            return [
+                'id' => $this->id,
+                'bcert_number' => $this->bcert_number,
+                'first_name' => $this->first_name,
+                'middle_name' => $this->middle_name,
+                'surname' => $this->surname,
+                'extension' => $this->extension,
+                'pob' => $this->pob,
+                'dob' => $this->dob,
+                'contact_no' => $this->contact_no,
+                'street' => $this->street,
+                'zone' => $this->zone,
+                'status' => $this->status,
+                'created_at' => $this->created_at,
+            ];
+        }
 
         public function creator()
         {

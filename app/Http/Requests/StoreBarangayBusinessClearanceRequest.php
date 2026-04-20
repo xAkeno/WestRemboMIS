@@ -39,6 +39,7 @@ class StoreBarangayBusinessClearanceRequest extends FormRequest
             'zone' => 'nullable|string|max:50',
             'or_no' => 'nullable|string|max:50',
             'inspected_by' => 'nullable|string|max:100',
+            'email' => 'nullable|email|max:255',
             'date_of_inspection' => 'nullable|date',
             'inspection_remarks' => 'nullable|string|max:500',
             'inspected_remarks' => 'nullable|string|max:500',

@@ -53,6 +53,7 @@ class Resident extends Model
         'user_id',
         'document_hash',
         'ipfs_cid',
+        'email',
     ];
 
     protected $casts = [
@@ -63,6 +64,20 @@ class Resident extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function toApi()
+    {
+        return [
+            'id' => $this->id,
+            'first_name' => $this->first_name,
+            'surname' => $this->surname,
+            'pob' => $this->pob,
+            'dob' => $this->dob,
+            'street' => $this->street,
+            'zone' => $this->zone,
+            'status' => $this->status,
+        ];
     }
 
     public function creator()

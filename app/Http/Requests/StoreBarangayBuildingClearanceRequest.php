@@ -39,6 +39,7 @@ class StoreBarangayBuildingClearanceRequest extends FormRequest
             'or_no' => 'nullable|string|max:50',
             'remarks' => 'nullable|string|max:500',
             'punong_barangay' => 'nullable|string|max:100',
+            'email' => 'nullable|email|max:255',
             'for_the_punong_barangay' => 'nullable|string|max:100',
             'barangay_position' => 'nullable|string|max:50',
             'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',  

@@ -40,7 +40,7 @@ class UpdateBarangayBuildingClearanceRequest extends FormRequest
             'purpose_details' => 'nullable|string|max:500',
 
             'or_no' => 'nullable|string|max:50', // ✅ FIXED
-
+            'email' => 'nullable|email|max:255',
             'remarks' => 'nullable|string|max:500',
             'punong_barangay' => 'nullable|string|max:100',
             'for_the_punong_barangay' => 'nullable|string|max:100',

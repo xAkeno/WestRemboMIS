@@ -29,6 +29,7 @@
                 'house_owner' => 'sometimes|nullable|string|max:100',
                 'relationship_to_owner' => 'sometimes|nullable|string|max:50',
                 'purpose' => 'sometimes|required|string|max:100',
+                'email' => 'nullable|email|max:255',
                 'purpose_details' => 'sometimes|nullable|string|max:500',
                 'punong_barangay' => 'sometimes|nullable|string|max:100',
                 'for_the_punong_barangay' => 'sometimes|nullable|string|max:100',

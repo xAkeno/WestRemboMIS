@@ -41,6 +41,7 @@ class BarangayBusinessClearance extends Model
         'released_at',
         'document_hash',
         'ipfs_cid',
+        'email',
     ];
 
     protected $casts = [
@@ -52,6 +53,21 @@ class BarangayBusinessClearance extends Model
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function toApi()
+    {
+        return [
+            'id' => $this->id,
+            'brgy_business_no' => $this->brgy_business_no,
+            'business_name' => $this->business_name,
+            'business_type' => $this->business_type,
+            'first_name' => $this->first_name,
+            'surname' => $this->surname,
+            'street' => $this->street,
+            'zone' => $this->zone,
+            'status' => $this->status,
+        ];
     }
 
     public function schedule()

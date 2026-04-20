@@ -33,6 +33,7 @@ class UpdateBarangayBusinessClearanceRequest extends FormRequest
             'date_of_inspection' => 'nullable|date',
             'inspection_remarks' => 'nullable|string|max:500',
             'inspected_remarks'  => 'nullable|string|max:500',
+            'email' => 'nullable|email|max:255',
             'date_inspected'     => 'nullable|date',
             'inspected_note'     => 'nullable|string|max:500',
             'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',   

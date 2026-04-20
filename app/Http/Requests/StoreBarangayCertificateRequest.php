@@ -22,6 +22,7 @@
                 'age' => 'nullable|integer|min:0|max:150',
                 'dob' => 'nullable|date',
                 'pob' => 'nullable|string|max:150',
+                'email' => 'nullable|email|max:255',
                 'contact_no' => ['nullable', 'regex:/^(09|\+639)\d{9}$/', 'max:20'],
                 'period_of_residency' => 'nullable|string|max:50',
                 'registered_voter' => 'nullable|string|max:20',
