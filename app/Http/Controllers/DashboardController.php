@@ -73,11 +73,11 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         // Temporary debug — remove after fixing
-        \Log::info('Dashboard auth check', [
-            'user'    => $user,
-            'id'      => optional($user)->id,
-            'guards'  => array_keys(config('auth.guards')),
-        ]);
+        // \Log::info('Dashboard auth check', [
+        //     'user'    => $user,
+        //     'id'      => optional($user)->id,
+        //     'guards'  => array_keys(config('auth.guards')),
+        // ]);
 
         $latestActivities = collect();
 
@@ -98,7 +98,7 @@ class DashboardController extends Controller
         } else {
             // Fallback: try getting user from request manually
             $user = $request->user();
-            \Log::info('Fallback user from request', ['user' => $user]);
+            // \Log::info('Fallback user from request', ['user' => $user]);
 
             if ($user) {
                 $latestActivities = ActivityLogger::query()
