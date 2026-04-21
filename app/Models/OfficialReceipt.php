@@ -10,7 +10,8 @@ class OfficialReceipt extends Model
         'type',
         'reference_id',
         'amount',
-        'year'
+        'year',
+        'tin_no',  // ← add this
     ];
 }
 

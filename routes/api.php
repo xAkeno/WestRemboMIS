@@ -203,7 +203,15 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::put('/contact/{id}', [ContactCmsController::class, 'update']);
     Route::delete('/contact/{id}', [ContactCmsController::class, 'destroy']);
 
-    Route::get('/generate-or', [OfficialReceiptController::class, 'generate']);
+    Route::get('/generate-or',          [OfficialReceiptController::class, 'generate']);
+    Route::post('/or-starting-number',  [OfficialReceiptController::class, 'setStartingNumber']);
+
+    Route::get('/official-receipts/by-or', [OfficialReceiptController::class, 'getByOrNumber']);
+    Route::patch('/official-receipts/by-or', [OfficialReceiptController::class, 'updateByOrNumber']);
+
+    Route::get('/official-receipts', [OfficialReceiptController::class, 'index']);
+    Route::get('/official-receipts/{id}', [OfficialReceiptController::class, 'show']);
+    Route::put('/official-receipts/{id}', [OfficialReceiptController::class, 'update']);
 
     Route::get('/service-prices', [ServicePriceController::class, 'index']);
     Route::put('/service-prices/{type}', [ServicePriceController::class, 'update']);
