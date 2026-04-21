@@ -27,11 +27,14 @@ class AuthController extends Controller
             'first_name' => 'required|string|max:255',
             'surname' => 'required|string|max:255',
             'email' => 'required|email:rfc,dns|max:255|unique:users,email',
-            'contact' => 'required|regex:/^[0-9+\-() ]+$/|max:20',
+            'contact_number' => 'required|regex:/^[0-9+\-() ]+$/|max:20',
             'date_of_birth' => 'required|date',
             'sex' => 'required|in:Male,Female,Other',
             'password' => 'required|string|min:8|confirmed',
             'id_url' => 'required|image|mimes:jpg,jpeg,png|max:2048',
+            'house_block_lot_no' => 'required|string|max:255',
+            'street' => 'required|string|max:255',
+            'zone_purok' => 'required|string|max:255',
         ]);
 
         // ---------------- UPLOAD IMAGE ----------------
@@ -68,12 +71,15 @@ class AuthController extends Controller
             'first_name' => $request->first_name,
             'surname' => $request->surname,
             'email' => $request->email,
-            'contact' => $request->contact,
+            'contact_number' => $request->contact_number,
             'sex' => $request->sex,
             'date_of_birth' => $request->date_of_birth,
+            'house_block_lot_no' => $request->house_block_lot_no,  // ✅ ADD
+            'street' => $request->street,                          // ✅ ADD
+            'zone_purok' => $request->zone_purok,                  // ✅ ADD
             'password' => Hash::make($request->password),
             'id_url' => $imagePath,
-            'supabase_id' => $supabaseUser['id'] ?? null, // 🔥 IMPORTANT
+            'supabase_id' => $supabaseUser['id'] ?? null,
         ]);
 
         // ---------------- EMAIL VERIFICATION ----------------
@@ -96,17 +102,31 @@ class AuthController extends Controller
 
     public function updateProfile(UpdateUserRequest $request)
     {
-        $user = $request->user(); // Get the logged-in user\
-        \Log::info($request->all());
-        \Log::info($request->validated());
-
-
-        $user->update($request->validated());
-
+        $user = $request->user();
+    
+        \Log::info('updateProfile incoming', $request->all());
+    
+        /*
+        * array_intersect_key keeps ONLY the keys that were actually present
+        * in the HTTP request body. This means if you save only the Contact tab
+        * (email + contact_number), the address fields are never touched in the DB.
+        *
+        * Without this, $request->validated() returns NULL for every field not
+        * sent — which overwrites existing DB values with NULL.
+        */
+        $data = array_intersect_key(
+            $request->validated(),
+            $request->all()
+        );
+    
+        \Log::info('updateProfile saving', $data);
+    
+        $user->update($data);
+    
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Profile updated successfully',
-            'data' => $user
+            'data'    => $user,
         ]);
     }
 
