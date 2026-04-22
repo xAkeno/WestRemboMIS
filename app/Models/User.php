@@ -74,6 +74,7 @@ class User extends Authenticatable
         'role',
         'status',
         'id_url',
+        'id_url_back',
         'is_approved',
         'email_verification_code',
         'email_verification_expires_at',
