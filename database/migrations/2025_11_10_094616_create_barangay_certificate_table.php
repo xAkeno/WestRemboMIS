@@ -17,9 +17,9 @@ return new class extends Migration
             $table->id();
             $table->string('bcert_number', 50);
             $table->string('requester_type')->nullable();
-            $table->date('issued_date');
+            $table->date('issued_date')->nullable();
             $table->string('prefix', 10)->nullable();
-            $table->string('firstname', 100);
+            $table->string('first_name', 100);
             $table->string('middle_name', 100)->nullable();
             $table->string('surname', 100);
             $table->string('extension', 10)->nullable();
@@ -27,8 +27,8 @@ return new class extends Migration
             $table->string('street', 100)->nullable();
             $table->string('zone', 50)->nullable();
             $table->integer('age')->nullable();
-            $table->date('date_of_birth')->nullable();
-            $table->string('place_of_birth', 150)->nullable();
+            $table->date('dob')->nullable();
+            $table->string('pob', 150)->nullable();
             $table->string('contact_no', 20)->nullable();
             $table->string('period_of_residency', 50)->nullable();
             $table->string('registered_voter', 20)->nullable();

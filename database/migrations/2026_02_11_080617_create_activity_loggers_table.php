@@ -17,14 +17,19 @@ return new class extends Migration
             $table->string('user_name')->nullable();
             $table->string('user_email')->nullable();
             $table->string('action');
+
             $table->enum('type', [
                 'login_attempt',
-                'account_change',
+                'account_change',   
                 'new_document',
                 'update_document',
                 'delete_document',
+                'create',
+                'update',
+                'status_update',
                 'other'
             ])->default('other');
+
             $table->text('description')->nullable();
             $table->string('ip_address')->nullable();
             $table->timestamps();

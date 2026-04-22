@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Contact;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\ContactReplyMail;
-
+use App\Models\ActivityLogger;
 class ContactController extends Controller
 {
     // Submit contact form
@@ -26,6 +26,12 @@ class ContactController extends Controller
             ...$request->all(),
             'status' => 'new' // default
         ]);
+
+        activity_log(
+            'Contact Submitted',
+            'create',
+            'Contact #' . $contact->id . ' from ' . $contact->first_name . ' ' . $contact->last_name
+        );
 
         return response()->json([
             'success' => true,
@@ -86,6 +92,12 @@ class ContactController extends Controller
         $contact->update([
             'status' => 'replied'
         ]);
+
+        activity_log(
+            'Contact Replied',
+            'reply',
+            'Reply sent to Contact #' . $contact->id . ' (' . $contact->email . ')'
+        );
 
         return response()->json([
             'success' => true,

@@ -5,9 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\User;
+use App\Traits\NotifiesStatusChange;
 class BarangayBusinessClearance extends Model
 {
     use HasFactory;
+    use NotifiesStatusChange;
     protected $fillable = [
         'brgy_business_no',
         'requester_type',
@@ -18,6 +20,7 @@ class BarangayBusinessClearance extends Model
         'middle_name',
         'ext_name',
         'business_name',
+        'requester_type',
         'business_type',
         'business_details',
         'capital',
@@ -33,7 +36,12 @@ class BarangayBusinessClearance extends Model
         'inspected_note',
         'status',
         'created_by',
-        'updated_by'
+        'updated_by',
+        'released_document_path',
+        'released_at',
+        'document_hash',
+        'ipfs_cid',
+        'email',
     ];
 
     protected $casts = [
@@ -47,9 +55,37 @@ class BarangayBusinessClearance extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function toApi()
+    {
+        return [
+            'id' => $this->id,
+            'brgy_business_no' => $this->brgy_business_no,
+            'business_name' => $this->business_name,
+            'business_type' => $this->business_type,
+            'first_name' => $this->first_name,
+            'surname' => $this->surname,
+            'street' => $this->street,
+            'zone' => $this->zone,
+            'status' => $this->status,
+        ];
+    }
+
+    public function schedule()
+    {
+        return $this->hasOne(\App\Models\Schedule::class, 'document_number', 'brgy_business_no');
+    }
+
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+    public function getDocumentNumber()
+    {
+        return $this->brgy_business_no;
     }
 }
 

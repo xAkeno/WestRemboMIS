@@ -17,8 +17,8 @@ class UpdateBarangayBusinessClearanceRequest extends FormRequest
             'brgy_business_no'   => 'nullable|string|max:50',
             'issued_date'        => 'nullable|date',
             'prefix'             => 'nullable|string|max:10',
-            'surname'            => 'sometimes|required|string|max:100',
-            'first_name'         => 'sometimes|required|string|max:100',
+            'surname'    => 'sometimes|nullable|string|max:100',
+            'first_name' => 'sometimes|nullable|string|max:100',
             'middle_name'        => 'nullable|string|max:100',
             'ext_name'           => 'nullable|string|max:10',
             'business_name'      => 'nullable|string|max:200',
@@ -33,8 +33,10 @@ class UpdateBarangayBusinessClearanceRequest extends FormRequest
             'date_of_inspection' => 'nullable|date',
             'inspection_remarks' => 'nullable|string|max:500',
             'inspected_remarks'  => 'nullable|string|max:500',
+            'email' => 'nullable|email|max:255',
             'date_inspected'     => 'nullable|date',
             'inspected_note'     => 'nullable|string|max:500',
+            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',   
         ];
     }
 }

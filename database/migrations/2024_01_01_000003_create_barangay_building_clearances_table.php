@@ -34,6 +34,7 @@ return new class extends Migration
             $table->string('barangay_position')->nullable(); // was barangayPosition
             // $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('cascade');
             $table->string('status', 50)->nullable()->default('ENCODED');
+            
             $table->timestamps();
         });
     }

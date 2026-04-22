@@ -21,8 +21,20 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\OfficialController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\ContactCmsController;
+use App\Http\Controllers\DocumentUploadController;
+use App\Http\Controllers\AIController;
+use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\DocumentReplyController;
+use App\Http\Controllers\OfficialReceiptController;
+use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\ServicePriceController;
+use App\Http\Controllers\ReleaseDocumentController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\TicketController;
+use App\Http\Controllers\SettingController;
+use App\Http\Controllers\NotificationController;
 // Public routes
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'supabaseLogin']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
 Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
@@ -68,19 +80,71 @@ Route::middleware('verified')->get('/dashboard', function() {
 // });
 
 // All routes - no authentication required
+Route::apiResource('barangay-certificates', BarangaCertificateController::class);
+Route::get('settings/', [SettingController::class, 'index']);
+
+
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
+
+    Route::get('/create-collection', function () {
+        $response = Http::put(env('VECTOR_DB').'/collections/chatbot', [
+            "vectors" => [
+                "size" => 768,
+                "distance" => "Cosine"
+            ]
+        ]);
+        return $response->json();
+    });
+    Route::prefix('settings')->group(function () {
+        Route::get('/{key}', [SettingController::class, 'show']);
+        Route::post('/update', [SettingController::class, 'update']);
+    });
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/test-embedding', [AIController::class, 'embedTest']);
     Route::get('/getAllUser', [AuthController::class, 'index']);
     Route::get('/users/{id}', [AuthController::class, 'show']);
     Route::put('/users/{id}/permissions', [AuthController::class, 'updatePermissions']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/details', [AuthController::class, 'details']);
+    Route::put('/users/{id}/approve', [AuthController::class, 'setApproval']);
     Route::post('/uploadProfileImage', [AuthController::class, 'uploadProfileImage']);
     Route::put('/updateProfile', [AuthController::class, 'updateProfile']);
     Route::apiResource('residents', ResidentController::class);
     Route::apiResource('business-clearances', BarangayBusinessClearanceController::class);
     Route::apiResource('building-clearances', BarangayBuildingClearanceController::class);
     Route::apiResource('barangay-clearances', BarangayClearanceController::class);
-    Route::apiResource('barangay-certificates', BarangaCertificateController::class);
+    Route::get('/activity-logs', [ActivityLogController::class, 'index']);
+
+
+    // Release a document: sets status=released, uploads PDF to S3
+    Route::post(
+        'documents/release/{documentType}/{id}',
+        [ReleaseDocumentController::class, 'release']
+    );
+ 
+    // Get a 15-min signed download URL for a released document
+    Route::get(
+        'documents/release/{documentType}/{id}/download',
+        [ReleaseDocumentController::class, 'download']
+    );
+
+    Route::post(
+        'documents/verify',
+        [ReleaseDocumentController::class, 'verify']
+    );
+
+    Route::get('/schedules', [ScheduleController::class, 'index']);
+    Route::post('/schedules', [ScheduleController::class, 'store']);
+    Route::get('/schedules/slots', [ScheduleController::class, 'getAvailableSlots']);
+    Route::get('/schedules/{document_number}', [ScheduleController::class, 'showByDocumentNumber']);
+    Route::put('/schedules/{document_number}/reschedule', [ScheduleController::class, 'reschedule']);
+    Route::prefix('documents')->group(function () {
+        Route::get('{type}/{id}/replies', [DocumentReplyController::class, 'index']);
+        Route::post('{type}/{id}/replies', [DocumentReplyController::class, 'store']);
+    });
+
+    // 🔥 NEW
+    Route::get('/documents/pending', [ScheduleController::class, 'getPendingDocuments']);
 
     Route::get('/contacts', [ContactController::class, 'index']);
     Route::patch('/contacts/{id}/status', [ContactController::class, 'updateStatus']);
@@ -96,7 +160,9 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::post('/tickets/{ticket}/remarks', [\App\Http\Controllers\TicketController::class, 'addRemark']);
     Route::post('/tickets/update-by-service/{ticketNumber}', [\App\Http\Controllers\TicketController::class, 'findByTicketNumberAndUpdateStatus']);
 
-    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::patch('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+    Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
 
     Route::get('/my-all-requests', [MyAllRequestsController::class, 'index']);
     // Route::get('/my-all-requests/{id}', [MyAllRequestsController::class, 'show']);
@@ -137,6 +203,62 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::put('/contact/{id}', [ContactCmsController::class, 'update']);
     Route::delete('/contact/{id}', [ContactCmsController::class, 'destroy']);
 
+    Route::get('/generate-or',          [OfficialReceiptController::class, 'generate']);
+    Route::post('/or-starting-number',  [OfficialReceiptController::class, 'setStartingNumber']);
+
+    Route::get('/official-receipts/by-or', [OfficialReceiptController::class, 'getByOrNumber']);
+    Route::patch('/official-receipts/by-or', [OfficialReceiptController::class, 'updateByOrNumber']);
+
+    Route::get('/official-receipts', [OfficialReceiptController::class, 'index']);
+    Route::get('/official-receipts/{id}', [OfficialReceiptController::class, 'show']);
+    Route::put('/official-receipts/{id}', [OfficialReceiptController::class, 'update']);
+
+    Route::get('/service-prices', [ServicePriceController::class, 'index']);
+    Route::put('/service-prices/{type}', [ServicePriceController::class, 'update']);
+
+    Route::prefix('tickets')->group(function () {
+
+        // =========================
+        // QUEUE CORE
+        // =========================
+
+        Route::post('/', [TicketController::class, 'store']); // kiosk/manual create
+        Route::get('/pending', [TicketController::class, 'pending']); // today queue
+        Route::get('/now-serving', [TicketController::class, 'nowServing']); // active queue
+
+        // =========================
+        // QUEUE ACTIONS
+        // =========================
+
+        Route::post('/call-next', [TicketController::class, 'callNext']); // NEXT TICKET
+
+        Route::patch('/{ticket}/status', [TicketController::class, 'updateStatus']);
+
+        Route::post('/{ticket}/move-back', [TicketController::class, 'moveBack']); 
+        // 👆 manual go back (optional but useful)
+
+        Route::post('/{ticket}/requeue-late', [TicketController::class, 'requeueLate']); 
+        // 👆 late user re-admission
+
+        // =========================
+        // LOOKUP / DETAILS
+        // =========================
+
+        Route::get('/{ticket}', [TicketController::class, 'show']);
+
+        Route::post('/find/{ticketNumber}', [
+            TicketController::class,
+            'findByTicketNumberAndUpdateStatus'
+        ]);
+
+        // =========================
+        // SUPPORTING FEATURES
+        // =========================
+
+        Route::get('/late', [TicketController::class, 'lateTickets']);
+
+        Route::post('/{ticket}/remarks', [TicketController::class, 'addRemark']);
+    });
 
 
     Route::get('/check-shell', function() {
@@ -146,15 +268,36 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
         return "shell_exec is NOT enabled";
     });
 
-    Route::post('/backup/full', [BackupController::class, 'runFullBackup']);
+    Route::prefix('mydocuments')->name('documents.')->group(function () {
+ 
+        // List all uploads for the authenticated user (grouped by category)
+        Route::get('/',        [DocumentUploadController::class, 'index'])->name('index');
+ 
+        // Upload a file — POST field: type (string) + file (multipart)
+        Route::post('/upload', [DocumentUploadController::class, 'upload'])->name('upload');
+ 
+        // Get a single document with a fresh signed S3 URL
+        Route::get('/{id}',    [DocumentUploadController::class, 'show'])->name('show');
+ 
+        // Remove a document (deletes S3 object + soft-deletes DB record)
+        Route::delete('/{id}', [DocumentUploadController::class, 'destroy'])->name('destroy');
+ 
+        // Final submit — validates all required slots across all categories
+        Route::post('/submit', [DocumentUploadController::class, 'submit'])->name('submit');
+ 
+    });
+
     Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
-    Route::post('/backup/files', [BackupController::class, 'runImagesBackup']);
-
     Route::get('/backup', [BackupController::class, 'listBackups']);
-    Route::get('/backup/{id}/download', [BackupController::class, 'downloadBackup']);
-
+    Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
+    Route::get('/backup/settings',  [BackupController::class, 'getSettings']);
+    Route::post('/backup/settings', [BackupController::class, 'saveSettings']);
+    Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
+    Route::post('/backup/restore-upload', [BackupController::class, 'restoreUpload']);
+    Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
+    
     Route::get('/documents', [DocumentController::class, 'index']);
-    Route::post('/documents/{document}', [DocumentController::class, 'update']);
+    Route::post('/documents/update/{id}', [DocumentController::class, 'update']);
     Route::post('/documents', [DocumentController::class, 'store']);
     Route::get('/documents/single/{id}', [DocumentController::class, 'show']);
     Route::put('/documents/{id}/layout', [DocumentController::class, 'updateLayout']);

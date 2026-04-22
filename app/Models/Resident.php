@@ -18,6 +18,7 @@ class Resident extends Model
         'first_name',
         'middle_name',
         'ext_name',
+        'requester_type',
         'nick_name',
         'sex',
         'marital_status',
@@ -26,8 +27,8 @@ class Resident extends Model
         'street',
         'zone',
         'resident_status',
-        'date_of_birth',
-        'place_of_birth',
+        'dob',
+        'pob',
         'height_cm',
         'weight_kg',
         'blood_type',
@@ -48,7 +49,11 @@ class Resident extends Model
         'photo',
         'status',
         'created_by',
-        'updated_by'
+        'updated_by',
+        'user_id',
+        'document_hash',
+        'ipfs_cid',
+        'email',
     ];
 
     protected $casts = [
@@ -56,11 +61,41 @@ class Resident extends Model
         'date_of_birth' => 'date'
     ];
 
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function toApi()
+    {
+        return [
+            'id' => $this->id,
+            'first_name' => $this->first_name,
+            'surname' => $this->surname,
+            'pob' => $this->pob,
+            'dob' => $this->dob,
+            'street' => $this->street,
+            'zone' => $this->zone,
+            'status' => $this->status,
+        ];
+    }
+
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
+   public function schedules()
+    {
+        return $this->hasManyThrough(
+            \App\Models\Schedule::class,
+            \App\Models\User::class,
+            'id',       // users.id
+            'user_id',  // schedules.user_id    
+            'user_id',  // residents.user_id
+            'id'        // users.id
+        );
+    }
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');

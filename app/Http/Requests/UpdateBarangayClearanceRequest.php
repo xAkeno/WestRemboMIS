@@ -45,8 +45,10 @@ class UpdateBarangayClearanceRequest extends FormRequest
             'ctc_vrr_no' => 'nullable|string|max:50',
             'issued_at' => 'nullable|string|max:100',
             'issued_on' => 'nullable|date',
+            'email' => 'nullable|email|max:255',
             'or_no' => 'nullable|string|max:50',
             'bomarke' => 'nullable|string|max:50',
+            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',   
         ];
     }
 }

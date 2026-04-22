@@ -12,7 +12,7 @@
             return [
                 'requester_type' => 'required|string|max:50',
                 'prefix' => 'nullable|string|max:10',
-                'firstname' => 'required|string|max:100',
+                'first_name' => 'required|string|max:100',
                 'middle_name' => 'nullable|string|max:100',
                 'surname' => 'required|string|max:100',
                 'extension' => 'nullable|string|max:10',
@@ -20,8 +20,9 @@
                 'street' => 'nullable|string|max:100',
                 'zone' => 'nullable|string|max:50',
                 'age' => 'nullable|integer|min:0|max:150',
-                'date_of_birth' => 'nullable|date',
-                'place_of_birth' => 'nullable|string|max:150',
+                'dob' => 'nullable|date',
+                'pob' => 'nullable|string|max:150',
+                'email' => 'nullable|email|max:255',
                 'contact_no' => ['nullable', 'regex:/^(09|\+639)\d{9}$/', 'max:20'],
                 'period_of_residency' => 'nullable|string|max:50',
                 'registered_voter' => 'nullable|string|max:20',
@@ -31,6 +32,8 @@
                 'purpose_details' => 'nullable|string|max:500',
                 'punong_barangay' => 'nullable|string|max:100',
                 'for_the_punong_barangay' => 'nullable|string|max:100',
+                'verification_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+                'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',  
             ];
         }
 

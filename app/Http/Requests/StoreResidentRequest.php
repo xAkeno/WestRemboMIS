@@ -37,8 +37,8 @@ class StoreResidentRequest extends FormRequest
             'street' => 'nullable|string|max:100',
             'zone' => 'nullable|string|max:50',
             'resident_status' => 'nullable|string|max:50',
-            'date_of_birth' => 'nullable|date',
-            'place_of_birth' => 'nullable|string|max:100',
+            'dob' => 'nullable|date',
+            'pob' => 'nullable|string|max:100',
             'height_cm' => 'nullable|integer|min:0|max:300',
             'weight_kg' => 'nullable|integer|min:0|max:500',
             'blood_type' => 'nullable|string|max:10',
@@ -46,6 +46,7 @@ class StoreResidentRequest extends FormRequest
             'religion' => 'nullable|string|max:50',
             'voter_status' => 'nullable|string|max:20',
             'precinct_no' => 'nullable|string|max:20',
+            'email' => 'nullable|email|max:255',
             'emp_status' => 'nullable|string|max:50',
             'occupation' => 'nullable|string|max:100',
             'position' => 'nullable|string|max:100',
@@ -57,6 +58,7 @@ class StoreResidentRequest extends FormRequest
             'email_address' => 'nullable|email|max:150',
             'notes' => 'nullable|string|max:1000',
             'photo' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',   
         ];
     }
 }
