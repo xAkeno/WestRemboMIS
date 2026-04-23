@@ -72,8 +72,10 @@ class DocumentController extends Controller
         ]);
     }
 
-    public function update(Request $request, Document $document)
+    public function update(Request $request, $id)
     {
+        $document = Document::findOrFail($id);
+
         $request->validate([
             'file' => 'required|mimes:pdf|max:10240',
             'layout' => 'nullable|json',
@@ -94,11 +96,12 @@ class DocumentController extends Controller
         $workerBaseUrl = env('R2_WORKER_URL');
 
         return response()->json([
-            'id' => $document->id,
-            'name' => $document->name,
-            'file_name' => $document->file_name,
-            'layout' => $document->layout,
+            'id'       => $document->id,
+            'name'     => $document->name,
+            'file_name'=> $document->file_name,
+            'layout'   => $document->layout,
             'file_url' => $path ? $workerBaseUrl . '/' . $path : null,
+            'file_path' => $path,
         ]);
     }
 

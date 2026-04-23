@@ -69,7 +69,7 @@ class KioskController extends Controller
 
             // ─── Contact ─────────────────────────────────────────────
             'contact_no'    => $data['contact_number'],
-            'email_address' => $data['email_address'] ?? null,
+            'email' => $data['email'] ?? null,
 
             // ─── Purpose ─────────────────────────────────────────────
             'purpose'         => $data['purpose'],

@@ -53,7 +53,7 @@ class Kiosk extends Model
 
         // ─── Contact ──────────────────────────────────────────────────────────
         'contact_no',
-        'email_address',
+        'email',
 
         // ─── Employment / PWD ─────────────────────────────────────────────────
         'emp_status',

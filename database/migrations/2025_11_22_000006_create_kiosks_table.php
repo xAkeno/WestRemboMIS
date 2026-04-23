@@ -53,7 +53,7 @@ return new class extends Migration {
 
             // ─── Contact ─────────────────────────────────────────────────────
             $table->string('contact_no', 20)->nullable();
-            $table->string('email_address')->nullable();           // residents
+            $table->string('email')->nullable();           // residents
 
             // ─── Employment / PWD ─────────────────────────────────────────────
             $table->string('emp_status')->nullable();              // residents
