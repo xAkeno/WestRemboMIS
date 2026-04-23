@@ -97,6 +97,15 @@ class AuthController extends Controller
         ]);
         Mail::to($user->email)->send(new VerificationCodeMail($code));
 
+        $response = Http::post('https://www.google.com/recaptcha/api/siteverify', [
+        'secret' => env('RECAPTCHA_SECRET_KEY'),
+        'response' => $request->recaptcha_token,
+        ]);
+
+        if (!$response->json('success')) {
+            return response()->json(['message' => 'reCAPTCHA verification failed.'], 422);
+        }
+
         return response()->json([
             'status'  => 'success',
             'message' => 'Account created successfully (Synced with Supabase)',
