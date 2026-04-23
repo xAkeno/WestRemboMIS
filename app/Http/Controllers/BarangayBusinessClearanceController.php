@@ -238,16 +238,17 @@ class BarangayBusinessClearanceController extends Controller
      */
     public function update(UpdateBarangayBusinessClearanceRequest $request, $id)
     {
-        $barangayBusinessClearance = BarangayBusinessClearance::findOrFail($id);
+        $record = BarangayBusinessClearance::findOrFail($id);
+
+        $oldStatus = strtoupper($record->status);
 
         $data = $request->validated();
+        $record->update($data);
 
-        $barangayBusinessClearance->update($data);
+        $newStatus = strtoupper($record->status);
 
-        // ✅ Only notify if status actually changed
-        if ($barangayBusinessClearance->wasChanged('status')) {
-
-            $status = strtoupper($barangayBusinessClearance->status);
+        // Only proceed if status actually changed
+        if ($oldStatus !== $newStatus) {
 
             $statusLabels = [
                 'PENDING'    => ['label' => 'Pending',    'message' => 'Your Business Clearance application is now pending review.'],
@@ -261,22 +262,25 @@ class BarangayBusinessClearanceController extends Controller
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Business Clearance is ready for payment.'],
             ];
 
-            $statusInfo = $statusLabels[$status] ?? null;
+            $statusInfo = $statusLabels[$newStatus] ?? null;
 
             if ($statusInfo) {
 
-                // ✅ FIXED: use surname (NOT last_name)
-                $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($barangayBusinessClearance->first_name)])
-                    ->whereRaw('LOWER(surname) = ?', [strtolower($barangayBusinessClearance->surname)])
-                    ->first();
+                $user = \App\Models\User::whereRaw(
+                    'LOWER(first_name) = ?',
+                    [strtolower($record->first_name)]
+                )->whereRaw(
+                    'LOWER(surname) = ?',
+                    [strtolower($record->surname)]
+                )->first();
 
                 if ($user) {
                     \App\Models\Notification::create([
                         'user_id'      => $user->id,
                         'title'        => 'Business Clearance — ' . $statusInfo['label'],
-                        'message'      => $statusInfo['message'] . ' (Ref #: ' . $barangayBusinessClearance->brgy_business_no . ')',
+                        'message'      => $statusInfo['message'] . ' (Ref #: ' . $record->brgy_business_no . ')',
                         'type'         => 'business_clearance',
-                        'reference_id' => $barangayBusinessClearance->id,
+                        'reference_id' => $record->id,
                     ]);
                 }
             }
@@ -285,13 +289,13 @@ class BarangayBusinessClearanceController extends Controller
         activity_log(
             'Business Clearance Updated',
             'update',
-            'Updated #: ' . $barangayBusinessClearance->brgy_business_no
+            'Updated #: ' . $record->brgy_business_no
         );
 
         return response()->json([
             'status'  => 'success',
             'message' => 'Business clearance updated successfully',
-            'data'    => $barangayBusinessClearance->fresh(),
+            'data'    => $record->fresh(),
         ]);
     }
 
@@ -303,88 +307,92 @@ class BarangayBusinessClearanceController extends Controller
 
         $record = BarangayBusinessClearance::findOrFail($id);
 
-        if ($validated['status'] === 'RELEASED') {
+        $oldStatus = strtoupper($record->status);
+        $newStatus = strtoupper($validated['status']);
+
+        // Update status FIRST
+        $record->status = $newStatus;
+
+        if ($newStatus === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
-            $record->expires_at  = now()->addYear(); // Business clearance = 1 year
+            $record->expires_at  = now()->addYear();
         }
 
-        $status = strtoupper($validated['status']);
+        $record->save();
 
-        $statusLabels = [
-            'PENDING'    => ['label' => 'Pending',    'message' => 'Your Business Clearance application is now pending review.'],
-            'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Business Clearance has been encoded.'],
-            'INCOMPLETE' => ['label' => 'Incomplete', 'message' => 'Your Business Clearance is incomplete.'],
-            'REJECTED'   => ['label' => 'Rejected',   'message' => 'Your Business Clearance was rejected.'],
-            'RELEASED'   => ['label' => 'Released',   'message' => 'Your Business Clearance is ready for release.'],
-            'SCHEDULED'  => ['label' => 'Scheduled',  'message' => 'Your Business Clearance has been scheduled.'],
-            'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Business Clearance has expired.'],
-            'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Business Clearance.'],
-            'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Business Clearance is ready for payment.'],
-        ];
+        // Only trigger notification if status changed
+        if ($oldStatus !== $newStatus) {
 
-        $statusInfo = $statusLabels[$status] ?? null;
+            $statusLabels = [
+                'PENDING'    => ['label' => 'Pending',    'message' => 'Your Business Clearance application is now pending review.'],
+                'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Business Clearance has been encoded.'],
+                'INCOMPLETE' => ['label' => 'Incomplete', 'message' => 'Your Business Clearance is incomplete.'],
+                'REJECTED'   => ['label' => 'Rejected',   'message' => 'Your Business Clearance was rejected.'],
+                'RELEASED'   => ['label' => 'Released',   'message' => 'Your Business Clearance is ready for release.'],
+                'SCHEDULED'  => ['label' => 'Scheduled',  'message' => 'Your Business Clearance has been scheduled.'],
+                'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Business Clearance has expired.'],
+                'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Business Clearance.'],
+                'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Business Clearance is ready for payment.'],
+            ];
 
-        if ($statusInfo) {
-            $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
-                ->first();
+            $statusInfo = $statusLabels[$newStatus] ?? null;
 
-            if ($user) {
-                \App\Models\Notification::create([
-                    'user_id'      => $user->id,
-                    'title'        => 'Business Clearance — ' . $statusInfo['label'],
-                    'message'      => $statusInfo['message'] . ' (Ref #: ' . $record->brgy_business_no . ')',
-                    'type'         => 'business_clearance',
-                    'reference_id' => $record->id,
-                ]);
+            if ($statusInfo) {
+
+                $user = \App\Models\User::whereRaw(
+                    'LOWER(first_name) = ?',
+                    [strtolower($record->first_name)]
+                )->whereRaw(
+                    'LOWER(surname) = ?',
+                    [strtolower($record->surname)]
+                )->first();
+
+                if ($user) {
+                    \App\Models\Notification::create([
+                        'user_id'      => $user->id,
+                        'title'        => 'Business Clearance — ' . $statusInfo['label'],
+                        'message'      => $statusInfo['message'] . ' (Ref #: ' . $record->brgy_business_no . ')',
+                        'type'         => 'business_clearance',
+                        'reference_id' => $record->id,
+                    ]);
+                }
             }
         }
 
-        $record->status = strtoupper($validated['status']);
-        $record->touch();
-        $record->save();
-
-        // Map clearance status → ticket status
+        // Ticket mapping
         $ticketStatusMap = [
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
         ];
 
-        $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
+        $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
 
         if ($ticketStatus) {
+
             $kiosk = \App\Models\Kiosk::where('service_type', 'Business Clearance')
                 ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
+                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
                 ->first();
 
-            \Log::info('Kiosk lookup for status update', [
-                'first_name' => $record->first_name,
-                'surname'    => $record->surname,
-                'kiosk_id'   => $kiosk?->id,
-            ]);
-
             if ($kiosk) {
-                $updated = Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
                     ->where('serviceable_id', $kiosk->id)
                     ->update(['status' => $ticketStatus]);
-
-                \Log::info('Ticket rows updated', ['count' => $updated]);
             }
         }
 
         activity_log(
             'Business Clearance Status Updated',
             'status_update',
-            'Changed to ' . $validated['status'] . ' (#: ' . $record->brgy_business_no . ')'
+            'Changed to ' . $newStatus . ' (#: ' . $record->brgy_business_no . ')'
         );
 
         return response()->json([
             'status'  => 'success',
-            'message' => 'Business clearance status updated',
+            'message' => 'Business clearance status updated successfully',
             'data'    => $record,
-        ], 200);
+        ]);
     }
 
     /**
@@ -397,9 +405,14 @@ class BarangayBusinessClearanceController extends Controller
         }
 
         $brgyBusinessNo = $barangayBusinessClearance->brgy_business_no;
+
         $barangayBusinessClearance->delete();
 
-        activity_log('Business Clearance Deleted', 'delete', 'Deleted #: ' . $brgyBusinessNo);
+        activity_log(
+            'Business Clearance Deleted',
+            'delete_document',
+            'Deleted #: ' . $brgyBusinessNo
+        );
 
         return response()->json([
             'status'  => 'success',

@@ -275,12 +275,14 @@ class BarangayBuildingClearanceController extends Controller
 
         $record = BarangayBuildingClearance::findOrFail($id);
 
-        if ($validated['status'] === 'RELEASED') {
+        $newStatus = strtoupper($validated['status']);
+
+        if ($newStatus === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
-            $record->expires_at  = now()->addMonths(12); // Building clearance keeps 12 months
+            $record->expires_at  = now()->addMonths(12);
         }
 
-        // --- Status label map ---
+        // Status labels
         $statusLabels = [
             'PENDING'    => ['label' => 'Pending',    'message' => 'Your Building Clearance application is now pending review.'],
             'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Building Clearance application has been encoded.'],
@@ -293,12 +295,11 @@ class BarangayBuildingClearanceController extends Controller
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Building Clearance is ready for payment.'],
         ];
 
-        $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
+        $statusInfo = $statusLabels[$newStatus] ?? null;
 
         if ($statusInfo) {
-            // 🔥 FIX: use surname instead of last_name
-            $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
+            $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name ?? '')])
+                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname ?? '')])
                 ->first();
 
             if ($user) {
@@ -312,45 +313,35 @@ class BarangayBuildingClearanceController extends Controller
             }
         }
 
-        $record->status = strtoupper($validated['status']);
-        $record->touch();
+        $record->status = $newStatus;
         $record->save();
 
-        // Map clearance status → ticket status
+        // Ticket mapping
         $ticketStatusMap = [
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
         ];
 
-        $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
+        $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
 
         if ($ticketStatus) {
-            // FIX: Kiosk stores the field as `surname`, not `last_name`
             $kiosk = \App\Models\Kiosk::where('service_type', 'Building Clearance')
-                ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
+                ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name ?? '')])
+                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname ?? '')])
                 ->first();
 
-            \Log::info('Kiosk lookup for status update', [
-                'first_name' => $record->first_name,
-                'surname'    => $record->surname,
-                'kiosk_id'   => $kiosk?->id,
-            ]);
-
             if ($kiosk) {
-                $updated = Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
                     ->where('serviceable_id', $kiosk->id)
                     ->update(['status' => $ticketStatus]);
-
-                \Log::info('Ticket rows updated', ['count' => $updated]);
             }
         }
 
         activity_log(
             'Building Clearance Status Updated',
             'status_update',
-            'Changed to ' . $validated['status'] . ' (#: ' . $record->bcert_number . ')'
+            'Changed to ' . $newStatus . ' (#: ' . $record->bcert_number . ')'
         );
 
         return response()->json([
@@ -368,7 +359,7 @@ class BarangayBuildingClearanceController extends Controller
         $bcertNumber = $barangayBuildingClearance->bcert_number;
         $barangayBuildingClearance->delete();
 
-        activity_log('Building Clearance Deleted', 'delete', 'Deleted #: ' . $bcertNumber);
+        activity_log('Building Clearance Deleted', 'delete_document', 'Deleted #: ' . $bcertNumber);
 
         return response()->json([
             'status'  => 'success',

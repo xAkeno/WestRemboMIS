@@ -229,10 +229,10 @@ class BarangayClearanceController extends Controller
 
         $barangayClearance->update($data);
 
-        // --- Detect if status changed ---
-        if (isset($data['status'])) {
+        // ✅ Only trigger if status actually changed
+        if ($barangayClearance->wasChanged('status')) {
 
-            $status = strtoupper($data['status']);
+            $status = strtoupper($barangayClearance->status);
 
             $statusLabels = [
                 'PENDING'    => ['label' => 'Pending',    'message' => 'Your Barangay Clearance application is now pending review.'],
@@ -249,9 +249,15 @@ class BarangayClearanceController extends Controller
             $statusInfo = $statusLabels[$status] ?? null;
 
             if ($statusInfo) {
-                // Find user (same logic as your status method)
-                $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                    ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
+
+                $user = \App\Models\User::whereRaw(
+                        'LOWER(first_name) = ?',
+                        [strtolower($barangayClearance->first_name)]
+                    )
+                    ->whereRaw(
+                        'LOWER(surname) = ?',
+                        [strtolower($barangayClearance->surname)]
+                    )
                     ->first();
 
                 if ($user) {
@@ -266,7 +272,11 @@ class BarangayClearanceController extends Controller
             }
         }
 
-        activity_log('Barangay Clearance Updated', 'update', 'Updated #: ' . $barangayClearance->bcert_number);
+        activity_log(
+            'Barangay Clearance Updated',
+            'update',
+            'Updated #: ' . $barangayClearance->bcert_number
+        );
 
         return response()->json([
             'status'  => 'success',
@@ -288,7 +298,6 @@ class BarangayClearanceController extends Controller
             $record->expires_at  = now()->addMonths(6);
         }
 
-        // --- Status label map for readable notification messages ---
         $statusLabels = [
             'PENDING'    => ['label' => 'Pending',    'message' => 'Your Barangay Clearance application is now pending review.'],
             'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Barangay Clearance application has been encoded into the system.'],
@@ -298,16 +307,21 @@ class BarangayClearanceController extends Controller
             'SCHEDULED'  => ['label' => 'Scheduled',  'message' => 'Your Barangay Clearance has been scheduled. Please check your appointment details.'],
             'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Barangay Clearance has expired. Please apply for a renewal.'],
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment for your Barangay Clearance has been confirmed.'],
-            'TO_PAY'     => ['label' => 'For Payment', 'message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
+            'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
         ];
 
-        // --- Send in-app notification to the owner ---
         $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
 
         if ($statusInfo) {
-            // Match by first_name + surname to find the user account
-            $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
+
+            $user = \App\Models\User::whereRaw(
+                    'LOWER(first_name) = ?',
+                    [strtolower($record->first_name)]
+                )
+                ->whereRaw(
+                    'LOWER(surname) = ?',
+                    [strtolower($record->surname)]
+                )
                 ->first();
 
             if ($user) {
@@ -322,10 +336,8 @@ class BarangayClearanceController extends Controller
         }
 
         $record->status = strtoupper($validated['status']);
-        $record->touch();
         $record->save();
 
-        // Map clearance status → ticket status
         $ticketStatusMap = [
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
@@ -335,24 +347,16 @@ class BarangayClearanceController extends Controller
         $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
 
         if ($ticketStatus) {
-            // FIX: Kiosk stores the field as `surname`, not `last_name`
+
             $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
                 ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
+                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
                 ->first();
 
-            \Log::info('Kiosk lookup for status update', [
-                'first_name' => $record->first_name,
-                'surname'    => $record->surname,
-                'kiosk_id'   => $kiosk?->id,
-            ]);
-
             if ($kiosk) {
-                $updated = Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
                     ->where('serviceable_id', $kiosk->id)
                     ->update(['status' => $ticketStatus]);
-
-                \Log::info('Ticket rows updated', ['count' => $updated]);
             }
         }
 
@@ -366,7 +370,7 @@ class BarangayClearanceController extends Controller
             'status'  => 'success',
             'message' => 'Barangay clearance status updated',
             'data'    => $record,
-        ], 200);
+        ]);
     }
 
     /**
@@ -377,7 +381,7 @@ class BarangayClearanceController extends Controller
         $bcertNumber = $barangayClearance->bcert_number;
         $barangayClearance->delete();
 
-        activity_log('Barangay Clearance Deleted', 'delete', 'Deleted #: ' . $bcertNumber);
+        activity_log('Barangay Clearance Deleted', 'delete_document', 'Deleted #: ' . $bcertNumber);
 
         return response()->json([
             'status'  => 'success',

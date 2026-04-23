@@ -266,12 +266,14 @@ class BarangaCertificateController extends Controller
 
         $record = BarangayCertificate::findOrFail($id);
 
-        if ($validated['status'] === 'RELEASED') {
+        $newStatus = strtoupper($validated['status']);
+
+        if ($newStatus === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
             $record->expires_at  = now()->addMonths(6);
         }
 
-        // --- Status labels ---
+        // Status labels
         $statusLabels = [
             'PENDING'    => ['label' => 'Pending',    'message' => 'Your Barangay Certificate is now pending review.'],
             'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Barangay Certificate has been encoded.'],
@@ -284,11 +286,12 @@ class BarangaCertificateController extends Controller
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Certificate is ready for payment.'],
         ];
 
-        $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
+        $statusInfo = $statusLabels[$newStatus] ?? null;
 
         if ($statusInfo) {
-            $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
+
+            $user = \App\Models\User::whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name ?? '')])
+                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname ?? '')])
                 ->first();
 
             if ($user) {
@@ -302,45 +305,35 @@ class BarangaCertificateController extends Controller
             }
         }
 
-        $record->status = strtoupper($validated['status']);
-        $record->touch();
+        $record->status = $newStatus;
         $record->save();
 
-        // Map clearance status → ticket status
+        // Ticket mapping
         $ticketStatusMap = [
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
         ];
 
-        $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
+        $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
 
         if ($ticketStatus) {
-            // Note: BarangayCertificate uses `firstname` (no underscore)
             $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Certificate')
-                ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
+                ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name ?? '')])
+                ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname ?? '')])
                 ->first();
 
-            \Log::info('Kiosk lookup for status update', [
-                'first_name' => $record->first_name,
-                'surname'   => $record->surname,
-                'kiosk_id'  => $kiosk?->id,
-            ]);
-
             if ($kiosk) {
-                $updated = Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
                     ->where('serviceable_id', $kiosk->id)
                     ->update(['status' => $ticketStatus]);
-
-                \Log::info('Ticket rows updated', ['count' => $updated]);
             }
         }
 
         activity_log(
             'Barangay Certificate Status Updated',
             'status_update',
-            'Changed to ' . $validated['status'] . ' (BCERT #: ' . $record->bcert_number . ')'
+            'Changed to ' . $newStatus . ' (BCERT #: ' . $record->bcert_number . ')'
         );
 
         return response()->json([
@@ -355,7 +348,7 @@ class BarangaCertificateController extends Controller
         $bcertNumber = $barangayCertificate->bcert_number;
         $barangayCertificate->delete();
 
-        activity_log('Barangay Certificate Deleted', 'delete', 'Deleted BCERT #: ' . $bcertNumber);
+        activity_log('Barangay Certificate Deleted', 'delete_delete', 'Deleted BCERT #: ' . $bcertNumber);
 
         return response()->json([
             'status'  => 'success',
