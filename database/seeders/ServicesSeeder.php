@@ -9,15 +9,13 @@ class ServicesSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('services')->insert([
+        $services = [
             [
                 'name' => 'Resident Registration',
                 'description' => 'Register as a resident of Barangay West Rembo to access various barangay services and programs.',
                 'requirements' => "Valid government ID\nProof of residence (utility bill, lease contract)\n2x2 ID photos (2 pieces)\nAccomplished registration form",
                 'processing_time' => '1-2 business days',
                 'fee' => 'Free',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'name' => 'Barangay Clearance',
@@ -25,8 +23,6 @@ class ServicesSeeder extends Seeder
                 'requirements' => "Valid ID\nProof of residence\nClearance application form",
                 'processing_time' => '1 business day',
                 'fee' => 'Free',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'name' => 'Business Clearance',
@@ -34,8 +30,6 @@ class ServicesSeeder extends Seeder
                 'requirements' => "Business permit\nValid ID\nCompleted application form",
                 'processing_time' => '2-3 business days',
                 'fee' => 'Free',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'name' => 'Building Clearance',
@@ -43,8 +37,6 @@ class ServicesSeeder extends Seeder
                 'requirements' => "Building permit\nID of applicant\nApplication form",
                 'processing_time' => '3-5 business days',
                 'fee' => 'Free',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
             [
                 'name' => 'Barangay Certificate',
@@ -52,9 +44,17 @@ class ServicesSeeder extends Seeder
                 'requirements' => "Valid ID\nPurpose of certificate\nApplication form",
                 'processing_time' => '1-2 business days',
                 'fee' => 'Free',
-                'created_at' => now(),
-                'updated_at' => now(),
             ],
-        ]);
+        ];
+
+        foreach ($services as $service) {
+            DB::table('services')->updateOrInsert(
+                ['name' => $service['name']], // unique check
+                array_merge($service, [
+                    'updated_at' => now(),
+                    'created_at' => now()
+                ])
+            );
+        }
     }
 }
