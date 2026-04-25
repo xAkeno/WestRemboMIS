@@ -270,7 +270,7 @@ class BarangayBuildingClearanceController extends Controller
     public function updateStatusBuilding(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING',
         ]);
 
         $record = BarangayBuildingClearance::findOrFail($id);
@@ -301,6 +301,7 @@ class BarangayBuildingClearanceController extends Controller
             'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Building Clearance has expired.'],
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Building Clearance.'],
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Building Clearance is ready for payment.'],
+            'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Building Clearance is currently being inspected.'],
         ];
 
         $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -373,6 +374,65 @@ class BarangayBuildingClearanceController extends Controller
             'status'  => 'success',
             'message' => 'Building clearance deleted successfully',
             'data'    => null,
+        ]);
+    }
+    public function setDisposition(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:REJECTED,INCOMPLETE',
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $record = BarangayBuildingClearance::findOrFail($id);
+
+        $newStatus = strtoupper($validated['status']);
+
+        // update record
+        $record->status = $newStatus;
+        $record->rejection_reason = $validated['reason'];
+        $record->save();
+
+        $statusLabels = [
+            'REJECTED' => [
+                'label' => 'Rejected',
+                'message' => 'Your Building Clearance application was rejected.'
+            ],
+            'INCOMPLETE' => [
+                'label' => 'Incomplete',
+                'message' => 'Your Building Clearance application is incomplete.'
+            ],
+        ];
+
+        $statusInfo = $statusLabels[$newStatus] ?? null;
+
+        if ($statusInfo) {
+
+            $user = \App\Models\User::whereRaw(
+                    'LOWER(first_name) = ?', [strtolower($record->first_name ?? '')]
+                )
+                ->whereRaw(
+                    'LOWER(surname) = ?', [strtolower($record->surname ?? '')]
+                )
+                ->first();
+
+            if ($user) {
+                \App\Models\Notification::create([
+                    'user_id'      => $user->id,
+                    'title'        => 'Building Clearance — ' . $statusInfo['label'],
+                    'message'      =>
+                        $statusInfo['message'] .
+                        ' Reason: ' . $validated['reason'] .
+                        ' (Ref #: ' . $record->bcert_number . ')',
+                    'type'         => 'building_clearance',
+                    'reference_id' => $record->id,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => "Building Clearance marked as {$newStatus}",
+            'data'    => $record->fresh(),
         ]);
     }
 }

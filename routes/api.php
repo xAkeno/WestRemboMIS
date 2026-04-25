@@ -253,6 +253,11 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::patch('/services/{service}', [ServiceController::class, 'update']);
     Route::delete('/services/{service}', [ServiceController::class, 'destroy']);
 
+    Route::post('barangay-certificates/{id}/disposition', [BarangaCertificateController::class, 'setDisposition']);
+    Route::post('barangay-clearances/{id}/disposition', [BarangayClearanceController::class, 'setDisposition']);
+    Route::post('barangay-building-clearances/{id}/disposition', [BarangayBuildingClearanceController::class, 'setDisposition']);
+    Route::post('barangay-business-clearances/{id}/disposition', [BarangayBusinessClearanceController::class, 'setDisposition']);
+    
     // ⚠️  CATCH-ALL — must be the very last route in this group
     Route::get('/documents/{filename}', function ($filename) {
         $path = storage_path('app/public/documents/' . $filename);

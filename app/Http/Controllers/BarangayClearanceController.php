@@ -244,6 +244,7 @@ class BarangayClearanceController extends Controller
                 'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Barangay Clearance has expired. Please apply for a renewal.'],
                 'PAID'       => ['label' => 'Paid',       'message' => 'Payment for your Barangay Clearance has been confirmed.'],
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
+                'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Clearance is currently being inspected.'],
             ];
 
             $statusInfo = $statusLabels[$status] ?? null;
@@ -288,7 +289,7 @@ class BarangayClearanceController extends Controller
     public function updateStatusClearance(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING',
         ]);
 
         $record = BarangayClearance::findOrFail($id);
@@ -316,6 +317,7 @@ class BarangayClearanceController extends Controller
             'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Barangay Clearance has expired. Please apply for a renewal.'],
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment for your Barangay Clearance has been confirmed.'],
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
+            'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Clearance is currently being inspected.'],
         ];
 
         $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
@@ -397,4 +399,66 @@ class BarangayClearanceController extends Controller
             'data'    => null,
         ]);
     }
+    public function setDisposition(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:REJECTED,INCOMPLETE',
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $record = BarangayClearance::findOrFail($id);
+
+        $oldStatus = strtoupper($record->status);
+        $newStatus = strtoupper($validated['status']);
+
+        // update status + reason
+        $record->status = $newStatus;
+        $record->rejection_reason = $validated['reason'];
+        $record->save();
+
+        $statusLabels = [
+            'REJECTED' => [
+                'label' => 'Rejected',
+                'message' => 'Your Barangay Clearance application was rejected.'
+            ],
+            'INCOMPLETE' => [
+                'label' => 'Incomplete',
+                'message' => 'Your Barangay Clearance application is incomplete.'
+            ],
+        ];
+
+        $statusInfo = $statusLabels[$newStatus] ?? null;
+
+        // notify user
+        if ($statusInfo) {
+
+            $user = \App\Models\User::whereRaw(
+                    'LOWER(first_name) = ?', [strtolower($record->first_name ?? '')]
+                )
+                ->whereRaw(
+                    'LOWER(surname) = ?', [strtolower($record->surname ?? '')]
+                )
+                ->first();
+
+            if ($user) {
+                \App\Models\Notification::create([
+                    'user_id'      => $user->id,
+                    'title'        => 'Barangay Clearance — ' . $statusInfo['label'],
+                    'message'      =>
+                        $statusInfo['message'] .
+                        ' Reason: ' . $validated['reason'] .
+                        ' (Ref #: ' . $record->bcert_number . ')',
+                    'type'         => 'clearance',
+                    'reference_id' => $record->id,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => "Barangay Clearance marked as {$newStatus}",
+            'data'    => $record->fresh(),
+        ]);
+    }
+    
 }

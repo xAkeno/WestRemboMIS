@@ -45,7 +45,8 @@ class StoreBarangayBusinessClearanceRequest extends FormRequest
             'inspected_remarks' => 'nullable|string|max:500',
             'date_inspected' => 'nullable|date',
             'inspected_note' => 'nullable|string|max:500',
-            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',  
+            'rejection_reason' => 'nullable|string|max:1000',
+            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING,INSPECTING',  
         ];
     }
 }

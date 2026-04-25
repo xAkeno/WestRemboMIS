@@ -48,7 +48,8 @@ class UpdateBarangayClearanceRequest extends FormRequest
             'email' => 'nullable|email|max:255',
             'or_no' => 'nullable|string|max:50',
             'bomarke' => 'nullable|string|max:50',
-            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',   
+            'rejection_reason' => 'nullable|string|max:1000',
+            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING,INSPECTING',   
         ];
     }
 }

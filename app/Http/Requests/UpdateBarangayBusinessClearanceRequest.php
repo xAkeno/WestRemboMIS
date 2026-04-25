@@ -36,7 +36,8 @@ class UpdateBarangayBusinessClearanceRequest extends FormRequest
             'email' => 'nullable|email|max:255',
             'date_inspected'     => 'nullable|date',
             'inspected_note'     => 'nullable|string|max:500',
-            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',   
+            'rejection_reason' => 'nullable|string|max:1000',
+            'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING,INSPECTING',   
         ];
     }
 }

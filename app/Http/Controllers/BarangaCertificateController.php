@@ -261,7 +261,7 @@ class BarangaCertificateController extends Controller
     public function updateStatus(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING',
         ]);
 
         $record = BarangayCertificate::findOrFail($id);
@@ -289,6 +289,7 @@ class BarangaCertificateController extends Controller
             'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Barangay Certificate has expired.'],
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Barangay Certificate.'],
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Certificate is ready for payment.'],
+            'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Certificate is currently being inspected.'],
         ];
 
         $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -359,6 +360,65 @@ class BarangaCertificateController extends Controller
             'status'  => 'success',
             'message' => 'Barangay certificate deleted successfully',
             'data'    => null,
+        ]);
+    }
+    public function setDisposition(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:REJECTED,INCOMPLETE',
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $record = BarangayCertificate::findOrFail($id);
+
+        $newStatus = strtoupper($validated['status']);
+
+        // update record
+        $record->status = $newStatus;
+        $record->rejection_reason = $validated['reason'];
+        $record->save();
+
+        $statusLabels = [
+            'REJECTED' => [
+                'label' => 'Rejected',
+                'message' => 'Your Barangay Certificate application was rejected.'
+            ],
+            'INCOMPLETE' => [
+                'label' => 'Incomplete',
+                'message' => 'Your Barangay Certificate application is incomplete.'
+            ],
+        ];
+
+        $statusInfo = $statusLabels[$newStatus] ?? null;
+
+        if ($statusInfo) {
+
+            $user = \App\Models\User::whereRaw(
+                    'LOWER(first_name) = ?', [strtolower($record->first_name ?? '')]
+                )
+                ->whereRaw(
+                    'LOWER(surname) = ?', [strtolower($record->surname ?? '')]
+                )
+                ->first();
+
+            if ($user) {
+                \App\Models\Notification::create([
+                    'user_id'      => $user->id,
+                    'title'        => 'Barangay Certificate — ' . $statusInfo['label'],
+                    'message'      =>
+                        $statusInfo['message'] .
+                        ' Reason: ' . $validated['reason'] .
+                        ' (Ref #: ' . $record->bcert_number . ')',
+                    'type'         => 'certificate',
+                    'reference_id' => $record->id,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => "Barangay Certificate marked as {$newStatus}",
+            'data'    => $record->fresh(),
         ]);
     }
 }

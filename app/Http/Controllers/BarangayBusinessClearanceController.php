@@ -260,6 +260,7 @@ class BarangayBusinessClearanceController extends Controller
                 'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Business Clearance has expired.'],
                 'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Business Clearance.'],
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Business Clearance is ready for payment.'],
+                'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Business Clearance is currently being inspected.'],
             ];
 
             $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -302,7 +303,7 @@ class BarangayBusinessClearanceController extends Controller
     public function updateStatusBusiness(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING',
         ]);
 
         $record = BarangayBusinessClearance::findOrFail($id);
@@ -339,6 +340,7 @@ class BarangayBusinessClearanceController extends Controller
                 'EXPIRED'    => ['label' => 'Expired',    'message' => 'Your Business Clearance has expired.'],
                 'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Business Clearance.'],
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Business Clearance is ready for payment.'],
+                'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Business Clearance is currently being inspected.'],
             ];
 
             $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -426,4 +428,66 @@ class BarangayBusinessClearanceController extends Controller
             'data'    => null,
         ]);
     }
+    public function setDisposition(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:REJECTED,INCOMPLETE',
+            'reason' => 'required|string|max:1000',
+        ]);
+
+        $record = BarangayBusinessClearance::findOrFail($id);
+
+        $oldStatus = strtoupper($record->status);
+        $newStatus = strtoupper($validated['status']);
+
+        // Update status + reason
+        $record->status = $newStatus;
+        $record->rejection_reason = $validated['reason']; // <-- uses your migration column
+        $record->save();
+
+        $statusLabels = [
+            'REJECTED' => [
+                'label' => 'Rejected',
+                'message' => 'Your Barangay Certificate application was rejected.'
+            ],
+            'INCOMPLETE' => [
+                'label' => 'Incomplete',
+                'message' => 'Your Barangay Certificate application is incomplete.'
+            ],
+        ];
+
+        $statusInfo = $statusLabels[$newStatus] ?? null;
+
+        // Notify user
+        if ($statusInfo) {
+            $user = \App\Models\User::whereRaw(
+                    'LOWER(first_name) = ?', [strtolower($record->first_name ?? '')]
+                )
+                ->whereRaw(
+                    'LOWER(surname) = ?', [strtolower($record->surname ?? '')]
+                )
+                ->first();
+
+            if ($user) {
+                \App\Models\Notification::create([
+                    'user_id'      => $user->id,
+                    'title'        => 'Barangay Certificate — ' . $statusInfo['label'],
+                    'message'      =>
+                        $statusInfo['message'] .
+                        ' Reason: ' . $validated['reason'] .
+                        ' (Ref #: ' . $record->bcert_number . ')',
+                    'type'         => 'certificate',
+                    'reference_id' => $record->id,
+                ]);
+            }
+        }
+
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => "Barangay Certificate marked as {$newStatus}",
+            'data'    => $record->fresh(),
+        ]);
+    }               
+    
 }
