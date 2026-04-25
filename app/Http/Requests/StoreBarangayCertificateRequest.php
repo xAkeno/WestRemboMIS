@@ -33,6 +33,7 @@
                 'punong_barangay' => 'nullable|string|max:100',
                 'for_the_punong_barangay' => 'nullable|string|max:100',
                 'verification_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+                'or_no' => 'nullable|string|max:100',
                 'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',  
             ];
         }

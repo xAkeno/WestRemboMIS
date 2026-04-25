@@ -32,6 +32,7 @@
                 'email' => 'nullable|email|max:255',
                 'purpose_details' => 'sometimes|nullable|string|max:500',
                 'punong_barangay' => 'sometimes|nullable|string|max:100',
+                'or_no' => 'sometimes|nullable|string|max:100',
                 'for_the_punong_barangay' => 'sometimes|nullable|string|max:100',
                 'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING',   
             ];

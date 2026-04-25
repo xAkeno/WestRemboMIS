@@ -31,7 +31,7 @@ class BarangayBusinessClearanceController extends Controller
             ->update(['status' => 'EXPIRED']);
 
         $query = BarangayBusinessClearance::with([
-            'schedule:id,document_number,schedule_date,schedule_time'
+            'schedule:id,document_number,schedule_date,schedule_time,user_id'
         ]);
 
         if ($request->filled('search')) {
@@ -313,9 +313,15 @@ class BarangayBusinessClearanceController extends Controller
         // Update status FIRST
         $record->status = $newStatus;
 
+        if ($newStatus === 'PAID') {
+            $record->issued_date = now();
+            $record->issued_at   = 'Barangay Hall';
+        }
+
         if ($newStatus === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
-            $record->expires_at  = now()->addYear();
+            $record->issued_at   = $record->issued_at ?? 'Barangay Hall';
+            $record->expires_at  = now()->addYear(); // 12 months
         }
 
         $record->save();

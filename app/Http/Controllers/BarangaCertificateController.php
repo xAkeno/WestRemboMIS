@@ -27,7 +27,7 @@ class BarangaCertificateController extends Controller
             ->update(['status' => 'EXPIRED']);
 
         $query = BarangayCertificate::with([
-            'schedule:id,document_number,schedule_date,schedule_time'
+            'schedule:id,document_number,schedule_date,schedule_time,user_id'
         ]);
 
         $columns = [
@@ -268,8 +268,13 @@ class BarangaCertificateController extends Controller
 
         $newStatus = strtoupper($validated['status']);
 
+        if ($newStatus === 'PAID') {
+            $record->issued_date = now();
+        }
+
         if ($newStatus === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
+            $record->issued_at   = $record->issued_at ?? 'Barangay Hall';
             $record->expires_at  = now()->addMonths(6);
         }
 

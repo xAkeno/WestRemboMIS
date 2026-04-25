@@ -40,6 +40,7 @@
             'document_hash',
             'ipfs_cid',
             'email',
+            'or_no',
         ];
         protected $casts = [
             'issued_date' => 'date',

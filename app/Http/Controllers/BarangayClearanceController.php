@@ -293,8 +293,16 @@ class BarangayClearanceController extends Controller
 
         $record = BarangayClearance::findOrFail($id);
 
-        if ($validated['status'] === 'RELEASED') {
+        $status = strtoupper($validated['status']);
+
+        if ($status === 'PAID') {
+            $record->issued_date = now();
+            $record->issued_at   = 'Barangay Hall';
+        }
+
+        if ($status === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
+            $record->issued_at   = $record->issued_at ?? 'Barangay Hall';
             $record->expires_at  = now()->addMonths(6);
         }
 
