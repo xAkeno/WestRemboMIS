@@ -23,95 +23,105 @@ class AuthController extends Controller
      * Register a new user
      */
     public function register(Request $request)
-    {
-        $request->validate([
-            'first_name'         => 'required|string|max:255',
-            'surname'            => 'required|string|max:255',
-            'email'              => 'required|email:rfc,dns|max:255|unique:users,email',
-            'contact_number'     => 'required|regex:/^[0-9+\-() ]+$/|max:20',
-            'date_of_birth'      => 'required|date',
-            'sex'                => 'required|in:Male,Female,Other',
-            'password'           => 'required|string|min:8|confirmed',
-            'id_url'             => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
-            'id_url_back'        => 'required|image|mimes:jpg,jpeg,png,webp|max:5120', // ← ADDED
-            'house_block_lot_no' => 'required|string|max:255',
-            'street'             => 'required|string|max:255',
-            'zone_purok'         => 'required|string|max:255',
-        ]);
+{
+    // ── STEP 1: Validate all fields including recaptcha_token ──
+    $request->validate([
+        'recaptcha_token'    => 'required|string',
+        'first_name'         => 'required|string|max:255',
+        'surname'            => 'required|string|max:255',
+        'email'              => 'required|email:rfc,dns|max:255|unique:users,email',
+        'contact_number'     => 'required|regex:/^[0-9+\-() ]+$/|max:20',
+        'date_of_birth'      => 'required|date',
+        'sex'                => 'required|in:Male,Female,Other',
+        'password'           => 'required|string|min:8|confirmed',
+        'id_url'             => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
+        'id_url_back'        => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
+        'house_block_lot_no' => 'required|string|max:255',
+        'street'             => 'required|string|max:255',
+        'zone_purok'         => 'required|string|max:255',
+    ]);
 
-        // Upload front ID
-        $imagePath = null;
-        if ($request->hasFile('id_url')) {
-            $imagePath = Storage::disk('s3')->putFile('ids', $request->file('id_url'));
-        }
-
-        // Upload back ID ← ADDED
-        $imagePathBack = null;
-        if ($request->hasFile('id_url_back')) {
-            $imagePathBack = Storage::disk('s3')->putFile('ids', $request->file('id_url_back'));
-        }
-
-        // Create in Supabase
-        $supabaseResponse = Http::withHeaders([
-            'apikey'        => env('SUPABASE_SERVICE_ROLE_KEY'),
-            'Authorization' => 'Bearer ' . env('SUPABASE_SERVICE_ROLE_KEY'),
-            'Content-Type'  => 'application/json',
-        ])->post(env('SUPABASE_URL') . '/auth/v1/admin/users', [
-            'email'         => $request->email,
-            'password'      => $request->password,
-            'email_confirm' => true,
-        ]);
-
-        if (!$supabaseResponse->successful()) {
-            return response()->json([
-                'status'  => 'failed',
-                'message' => 'Failed to create user in Supabase',
-                'error'   => $supabaseResponse->json(),
-            ], 500);
-        }
-
-        $supabaseUser = $supabaseResponse->json();
-
-        // Create in Laravel — saves BOTH id paths ← FIXED
-        $user = User::create([
-            'first_name'         => $request->first_name,
-            'surname'            => $request->surname,
-            'email'              => $request->email,
-            'contact_number'     => $request->contact_number,
-            'sex'                => $request->sex,
-            'date_of_birth'      => $request->date_of_birth,
-            'house_block_lot_no' => $request->house_block_lot_no,
-            'street'             => $request->street,
-            'zone_purok'         => $request->zone_purok,
-            'password'           => Hash::make($request->password),
-            'id_url'             => $imagePath,
-            'id_url_back'        => $imagePathBack, // ← ADDED
-            'supabase_id'        => $supabaseUser['id'] ?? null,
-        ]);
-
-        // Send verification email
-        $code = rand(100000, 999999);
-        $user->update([
-            'email_verification_code'       => $code,
-            'email_verification_expires_at' => now()->addMinutes(10),
-        ]);
-        Mail::to($user->email)->send(new VerificationCodeMail($code));
-
-        $response = Http::post('https://www.google.com/recaptcha/api/siteverify', [
-        'secret' => env('RECAPTCHA_SECRET_KEY'),
+    // ── STEP 2: Verify reCAPTCHA with Google (only once) ──
+    $recaptchaResponse = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+        'secret'   => env('RECAPTCHA_SECRET_KEY'),
         'response' => $request->recaptcha_token,
-        ]);
+        'remoteip' => $request->ip(),
+    ]);
 
-        if (!$response->json('success')) {
-            return response()->json(['message' => 'reCAPTCHA verification failed.'], 422);
-        }
+    $recaptchaResult = $recaptchaResponse->json();
 
+    
+
+    if (empty($recaptchaResult['success']) || $recaptchaResult['success'] !== true) {
         return response()->json([
-            'status'  => 'success',
-            'message' => 'Account created successfully (Synced with Supabase)',
-            'data'    => $user,
-        ], 201);
+            'message' => 'reCAPTCHA verification failed. Please try again.',
+        ], 422);
     }
+
+    // ── STEP 3: Upload front ID ──
+    $imagePath = null;
+    if ($request->hasFile('id_url')) {
+        $imagePath = Storage::disk('s3')->putFile('ids', $request->file('id_url'));
+    }
+
+    // ── STEP 4: Upload back ID ──
+    $imagePathBack = null;
+    if ($request->hasFile('id_url_back')) {
+        $imagePathBack = Storage::disk('s3')->putFile('ids', $request->file('id_url_back'));
+    }
+
+    // ── STEP 5: Create user in Supabase ──
+    $supabaseResponse = Http::withHeaders([
+        'apikey'        => env('SUPABASE_SERVICE_ROLE_KEY'),
+        'Authorization' => 'Bearer ' . env('SUPABASE_SERVICE_ROLE_KEY'),
+        'Content-Type'  => 'application/json',
+    ])->post(env('SUPABASE_URL') . '/auth/v1/admin/users', [
+        'email'         => $request->email,
+        'password'      => $request->password,
+        'email_confirm' => true,
+    ]);
+
+    if (!$supabaseResponse->successful()) {
+        return response()->json([
+            'status'  => 'failed',
+            'message' => 'Failed to create user in Supabase',
+            'error'   => $supabaseResponse->json(),
+        ], 500);
+    }
+
+    $supabaseUser = $supabaseResponse->json();
+
+    // ── STEP 6: Create user in Laravel ──
+    $user = User::create([
+        'first_name'         => $request->first_name,
+        'surname'            => $request->surname,
+        'email'              => $request->email,
+        'contact_number'     => $request->contact_number,
+        'sex'                => $request->sex,
+        'date_of_birth'      => $request->date_of_birth,
+        'house_block_lot_no' => $request->house_block_lot_no,
+        'street'             => $request->street,
+        'zone_purok'         => $request->zone_purok,
+        'password'           => Hash::make($request->password),
+        'id_url'             => $imagePath,
+        'id_url_back'        => $imagePathBack,
+        'supabase_id'        => $supabaseUser['id'] ?? null,
+    ]);
+
+    // ── STEP 7: Send verification email ──
+    $code = rand(100000, 999999);
+    $user->update([
+        'email_verification_code'       => $code,
+        'email_verification_expires_at' => now()->addMinutes(10),
+    ]);
+    Mail::to($user->email)->send(new VerificationCodeMail($code));
+
+    return response()->json([
+        'status'  => 'success',
+        'message' => 'Account created successfully (Synced with Supabase)',
+        'data'    => $user,
+    ], 201);
+}
 
     // ─── NEW: GET /api/user ───────────────────────────────────────────────────
     // Used by DocumentUploadSection to pre-populate valid_id_front / valid_id_back
