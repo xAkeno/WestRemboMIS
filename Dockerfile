@@ -40,6 +40,10 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # =========================
 COPY . .
 
+# 🔥 IMPORTANT FIX (ADD THIS)
+RUN php -m | grep gd
+RUN php -m | grep gmp
+
 # =========================
 # Install dependencies
 # =========================
