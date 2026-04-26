@@ -3,7 +3,7 @@ FROM php:8.2-cli
 WORKDIR /var/www/html
 
 # =========================
-# System dependencies
+# System packages
 # =========================
 RUN apt-get update && apt-get install -y \
     git \
@@ -13,7 +13,15 @@ RUN apt-get update && apt-get install -y \
     ghostscript \
     libpq-dev \
     libzip-dev \
-    && docker-php-ext-install pdo pdo_pgsql zip
+    libonig-dev \
+    libxml2-dev \
+    && docker-php-ext-install \
+    pdo \
+    pdo_pgsql \
+    zip \
+    bcmath \
+    mbstring \
+    xml
 
 # =========================
 # Composer
@@ -21,7 +29,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # =========================
-# Copy composer files first (IMPORTANT FIX for Render)
+# Copy ONLY composer files first (IMPORTANT)
 # =========================
 COPY composer.json composer.lock ./
 
@@ -33,16 +41,15 @@ RUN composer install \
     --no-progress
 
 # =========================
-# Copy full project
+# Copy app
 # =========================
 COPY . .
 
 # =========================
-# Laravel permissions
+# Permissions
 # =========================
 RUN mkdir -p storage bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache
+    && chmod -R 775 storage bootstrap/cache
 
 # =========================
 # Entrypoint
@@ -50,9 +57,6 @@ RUN mkdir -p storage bootstrap/cache \
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# =========================
-# Render port
-# =========================
 EXPOSE 10000
 
 ENTRYPOINT ["docker-entrypoint.sh"]
