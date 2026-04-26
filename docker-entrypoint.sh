@@ -19,6 +19,9 @@ php artisan db:seed --class=ContactCmsSeeder --force || echo "ContactCmsSeeder a
 echo "Seeding service prices..."
 php artisan db:seed --class=ServicePriceSeeder --force || echo "ServicePriceSeeder already run"
 
+echo "Seeding settings..."
+php artisan db:seed --class=SettingSeeder --force || echo "SettingSeeder already run"
+
 echo "Clearing cache..."
 php artisan config:clear
 php artisan cache:clear
