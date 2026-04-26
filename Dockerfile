@@ -3,7 +3,7 @@ FROM php:8.2-cli
 WORKDIR /var/www/html
 
 # =========================
-# System packages
+# System dependencies
 # =========================
 RUN apt-get update && apt-get install -y \
     git \
@@ -15,13 +15,14 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     libonig-dev \
     libxml2-dev \
+    libcurl4-openssl-dev \
     && docker-php-ext-install \
     pdo \
     pdo_pgsql \
     zip \
-    bcmath \
     mbstring \
-    xml
+    xml \
+    bcmath
 
 # =========================
 # Composer
@@ -29,21 +30,18 @@ RUN apt-get update && apt-get install -y \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # =========================
-# Copy ONLY composer files first (IMPORTANT)
-# =========================
-COPY composer.json composer.lock ./
-
-RUN composer install \
-    --no-dev \
-    --optimize-autoloader \
-    --no-interaction \
-    --prefer-dist \
-    --no-progress
-
-# =========================
-# Copy app
+# COPY FULL PROJECT FIRST (IMPORTANT FIX FOR YOUR CASE)
 # =========================
 COPY . .
+
+# =========================
+# Install dependencies AFTER full copy
+# =========================
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader
 
 # =========================
 # Permissions
