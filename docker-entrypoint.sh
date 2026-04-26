@@ -5,7 +5,8 @@ echo "Creating storage symlink..."
 php artisan storage:link || echo "Link already exists"
 
 echo "Running migrations..."
-php artisan migrate --force
+php artisan migrate --force --no-interaction || php artisan migrate:fresh --force
+
 
 echo "Seeding default services..."
 php artisan db:seed --class=ServicesSeeder --force || echo "ServicesSeeder already run"
@@ -18,6 +19,9 @@ php artisan db:seed --class=ContactCmsSeeder --force || echo "ContactCmsSeeder a
 
 echo "Seeding service prices..."
 php artisan db:seed --class=ServicePriceSeeder --force || echo "ServicePriceSeeder already run"
+
+echo "Seeding settings..."
+php artisan db:seed --class=SettingSeeder --force || echo "SettingSeeder already run"
 
 echo "Clearing cache..."
 php artisan config:clear

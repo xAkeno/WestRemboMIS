@@ -2,25 +2,66 @@ FROM php:8.2-cli
 
 WORKDIR /var/www/html
 
+# =========================
+# System dependencies
+# =========================
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
-    libpq-dev \
-    libzip-dev \
     zip \
     curl \
-    && docker-php-ext-install pdo pdo_pgsql zip
+    ghostscript \
+    libpq-dev \
+    libzip-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libgmp-dev \
+    libonig-dev \
+    libxml2-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+        pdo \
+        pdo_pgsql \
+        zip \
+        mbstring \
+        xml \
+        bcmath \
+        gd \
+        gmp
 
+# =========================
+# Composer
+# =========================
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+# =========================
+# Copy project
+# =========================
 COPY . .
 
-RUN composer install --no-dev --optimize-autoloader
+# 🔥 IMPORTANT FIX (ADD THIS)
+RUN php -m | grep gd
+RUN php -m | grep gmp
 
-# ✅ FIX: ensure folders exist first
+# =========================
+# Install dependencies
+# =========================
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader
+
+# =========================
+# Laravel permissions
+# =========================
 RUN mkdir -p storage bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache
+    && chmod -R 775 storage bootstrap/cache
 
+# =========================
+# Entrypoint
+# =========================
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
