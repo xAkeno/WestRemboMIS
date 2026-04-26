@@ -4,8 +4,11 @@ set -e
 echo "Creating storage symlink..."
 php artisan storage:link || echo "Link already exists"
 
+php artisan migrate:status
+
 echo "Running migrations..."
-php artisan migrate --force
+php artisan migrate --force --no-interaction
+
 
 echo "Seeding default services..."
 php artisan db:seed --class=ServicesSeeder --force || echo "ServicesSeeder already run"
