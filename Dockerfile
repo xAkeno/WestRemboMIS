@@ -13,16 +13,22 @@ RUN apt-get update && apt-get install -y \
     ghostscript \
     libpq-dev \
     libzip-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libgmp-dev \
     libonig-dev \
     libxml2-dev \
-    libcurl4-openssl-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
-    pdo \
-    pdo_pgsql \
-    zip \
-    mbstring \
-    xml \
-    bcmath
+        pdo \
+        pdo_pgsql \
+        zip \
+        mbstring \
+        xml \
+        bcmath \
+        gd \
+        gmp
 
 # =========================
 # Composer
@@ -30,12 +36,12 @@ RUN apt-get update && apt-get install -y \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # =========================
-# COPY FULL PROJECT FIRST (IMPORTANT FIX FOR YOUR CASE)
+# Copy project
 # =========================
 COPY . .
 
 # =========================
-# Install dependencies AFTER full copy
+# Install dependencies
 # =========================
 RUN composer install \
     --no-dev \
@@ -44,7 +50,7 @@ RUN composer install \
     --optimize-autoloader
 
 # =========================
-# Permissions
+# Laravel permissions
 # =========================
 RUN mkdir -p storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
