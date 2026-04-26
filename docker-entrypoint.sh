@@ -4,8 +4,6 @@ set -e
 echo "Creating storage symlink..."
 php artisan storage:link || echo "Link already exists"
 
-php artisan migrate:status
-
 echo "Running migrations..."
 php artisan migrate --force --no-interaction || php artisan migrate:fresh --force
 
