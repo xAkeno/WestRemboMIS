@@ -27,11 +27,11 @@ class ContactController extends Controller
             'status' => 'new' // default
         ]);
 
-        activity_log(
-            'Contact Submitted',
-            'create',
-            'Contact #' . $contact->id . ' from ' . $contact->first_name . ' ' . $contact->last_name
-        );
+        // activity_log(
+        //     'Contact Submitted',
+        //     'create',
+        //     'Contact #' . $contact->id . ' from ' . $contact->first_name . ' ' . $contact->last_name
+        // );
 
         return response()->json([
             'success' => true,
@@ -93,11 +93,11 @@ class ContactController extends Controller
             'status' => 'replied'
         ]);
 
-        activity_log(
-            'Contact Replied',
-            'reply',
-            'Reply sent to Contact #' . $contact->id . ' (' . $contact->email . ')'
-        );
+        // activity_log(
+        //     'Contact Replied',
+        //     'reply',
+        //     'Reply sent to Contact #' . $contact->id . ' (' . $contact->email . ')'
+        // );
 
         return response()->json([
             'success' => true,
