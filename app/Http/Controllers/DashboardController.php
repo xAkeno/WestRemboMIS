@@ -20,6 +20,7 @@ use App\Models\BarangayCertificate as BcertModel;
 use App\Models\ActivityLogger;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -43,7 +44,7 @@ class DashboardController extends Controller
             'Resident'             => Resident::whereIn('status', $pendingStatuses)->count(),
         ];
 
-        // ── Ticket Queue (Pending tickets sorted) ───────────────────
+        // ── Ticket Queue ─────────────────────────────────────────────
         $tickets = Ticket::with('serviceable')
             ->whereIn('status', ['Pending', 'Encoded', 'called', 'waiting', 'processing', 'late'])
             ->orderByRaw("FIELD(status, 'Pending', 'Encoded')")
@@ -51,14 +52,14 @@ class DashboardController extends Controller
             ->orderBy('submitted_at', 'asc')
             ->get();
 
-        // ── Now Serving ─────────────────────────────────────────────
+        // ── Now Serving ──────────────────────────────────────────────
         $nowServing = Ticket::with('serviceable')
             ->where('status', 'Pending')
             ->orderByRaw("FIELD(priority, 'High', 'Normal', 'Low')")
             ->orderBy('submitted_at', 'asc')
             ->first();
 
-        // ── Notifications ────────────────────────────────────────────
+        // ── Notifications ─────────────────────────────────────────────
         $notifications = Notification::latest()->take(20)->get()->map(function ($n) {
             return [
                 'id'      => $n->id,
@@ -68,17 +69,8 @@ class DashboardController extends Controller
             ];
         });
 
-        // ── Latest Activities (current user only from ActivityLogger) ─
-        // ── Latest Activities (current user only from ActivityLogger) ─
-        $user = Auth::user();
-
-        // Temporary debug — remove after fixing
-        // \Log::info('Dashboard auth check', [
-        //     'user'    => $user,
-        //     'id'      => optional($user)->id,
-        //     'guards'  => array_keys(config('auth.guards')),
-        // ]);
-
+        // ── Latest Activities ─────────────────────────────────────────
+        $user = Auth::user() ?? $request->user();
         $latestActivities = collect();
 
         if ($user) {
@@ -87,63 +79,86 @@ class DashboardController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->take(10)
                 ->get()
-                ->map(function ($log) {
-                    return [
-                        'action'      => $log->action,
-                        'description' => $log->description,
-                        'type'        => $log->type,
-                        'created_at'  => $log->created_at,
-                    ];
-                });
-        } else {
-            // Fallback: try getting user from request manually
-            $user = $request->user();
-            // \Log::info('Fallback user from request', ['user' => $user]);
-
-            if ($user) {
-                $latestActivities = ActivityLogger::query()
-                    ->where('user_id', $user->id)
-                    ->orderBy('created_at', 'desc')
-                    ->take(10)
-                    ->get()
-                    ->map(function ($log) {
-                        return [
-                            'action'      => $log->action,
-                            'description' => $log->description,
-                            'type'        => $log->type,
-                            'created_at'  => $log->created_at,
-                        ];
-                    });
-            }
+                ->map(fn ($log) => [
+                    'action'      => $log->action,
+                    'description' => $log->description,
+                    'type'        => $log->type,
+                    'created_at'  => $log->created_at,
+                ]);
         }
+
         // ── Total Released Today ──────────────────────────────────────
-        $today = Carbon::today();
-        $totalReleasedToday = BcertModel::where('status', 'RELEASED')
-            ->count();
+        $totalReleasedToday = BcertModel::where('status', 'RELEASED')->count();
+
+        // ── Today's date (respects app timezone) ──────────────────────
+        // Carbon::today() uses UTC by default which was returning the wrong
+        // date. Carbon::now(config('app.timezone')) uses the timezone set
+        // in config/app.php — make sure it is set to 'Asia/Manila'.
+        $today = Carbon::now(config('app.timezone'))->toDateString();
+
+        // ── Load today's schedules keyed by document_number ───────────
+        $todaySchedules = DB::table('schedules')
+            ->whereDate('schedule_date', $today)
+            ->get()
+            ->keyBy('document_number');
+
+        // ── Helper: build today's list for one model ──────────────────
+        $todayList = function (string $modelClass, string $docNumberColumn, string $documentType) use ($todaySchedules) {
+            return $modelClass::all()
+                ->filter(function ($item) use ($todaySchedules, $docNumberColumn, $documentType) {
+                    $docNumber = $item->{$docNumberColumn};
+                    return isset($todaySchedules[$docNumber])
+                        && $todaySchedules[$docNumber]->document_type === $documentType;
+                })
+                ->map(function ($item) use ($todaySchedules, $docNumberColumn) {
+                    $schedule = $todaySchedules[$item->{$docNumberColumn}] ?? null;
+                    return array_merge($item->toApi(), [
+                        'schedule_date' => $schedule->schedule_date ?? null,
+                        'schedule_time' => $schedule->schedule_time ?? null,
+                    ]);
+                })
+                ->values();
+        };
 
         return response()->json([
             'data' => [
-                // Chart (NO CHANGE)
+                // ── Chart ───────────────────────────────────────────
                 'barangay_clearances'   => $barangayClearance->getData(),
                 'business_clearances'   => $businessClearance->getData(),
                 'building_clearances'   => $buildingClearance->getData(),
                 'barangay_certificates' => $barangayCertificate->getData(),
                 'residents'             => $residents->getData(),
 
-                // FIXED DATA OUTPUT
-                'pending_counts'        => $pendingCounts,
-                'tickets'               => $tickets,
-                'now_serving'           => $nowServing,
-                'notifications'         => $notifications,
-                'latest_activities'     => $latestActivities,
-                'total_released_today'  => $totalReleasedToday,
+                // ── Meta ────────────────────────────────────────────
+                'pending_counts'       => $pendingCounts,
+                'tickets'              => $tickets,
+                'now_serving'          => $nowServing,
+                'notifications'        => $notifications,
+                'latest_activities'    => $latestActivities,
+                'total_released_today' => $totalReleasedToday,
 
-                // 🔥 FIX HERE (IMPORTANT)
-                'barangay_certificates_list' => \App\Models\BarangayCertificate::all()->map->toApi(),
-                'barangay_clearances_list'   => \App\Models\BarangayClearance::all()->map->toApi(),
-                'building_clearances_list'   => \App\Models\BarangayBuildingClearance::all()->map->toApi(),
-                'business_clearances_list'   => \App\Models\BarangayBusinessClearance::all()->map->toApi(),
-                'residents_list'             => \App\Models\Resident::all()->map->toApi(),
+                // ── Lists: only records scheduled for today ───────────
+                'barangay_certificates_list' => $todayList(
+                    \App\Models\BarangayCertificate::class,
+                    'bcert_number',
+                    'barangay_certificate'
+                ),
+                'barangay_clearances_list' => $todayList(
+                    \App\Models\BarangayClearance::class,
+                    'bcert_number',
+                    'barangay_clearance'
+                ),
+                'building_clearances_list' => $todayList(
+                    \App\Models\BarangayBuildingClearance::class,
+                    'bcert_number',
+                    'building_clearance'
+                ),
+                'business_clearances_list' => $todayList(
+                    \App\Models\BarangayBusinessClearance::class,
+                    'brgy_business_no',
+                    'business_clearance'
+                ),
+                'residents_list' => [],
             ]
         ]);
     }
