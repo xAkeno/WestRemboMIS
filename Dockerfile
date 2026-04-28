@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y \
     libgmp-dev \
     libonig-dev \
     libxml2-dev \
+    ca-certificates \
+    postgresql-client \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo \
@@ -36,17 +38,10 @@ RUN apt-get update && apt-get install -y \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # =========================
-# Copy project
+# Copy composer first (cache optimization 🔥)
 # =========================
-COPY . .
+COPY composer.json composer.lock ./
 
-# 🔥 IMPORTANT FIX (ADD THIS)
-RUN php -m | grep gd
-RUN php -m | grep gmp
-
-# =========================
-# Install dependencies
-# =========================
 RUN composer install \
     --no-dev \
     --no-interaction \
@@ -54,9 +49,15 @@ RUN composer install \
     --optimize-autoloader
 
 # =========================
+# Copy rest of project
+# =========================
+COPY . .
+
+# =========================
 # Laravel permissions
 # =========================
 RUN mkdir -p storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
 # =========================
@@ -67,4 +68,4 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 10000
 
-ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["docker-entrypoint.sh"]
