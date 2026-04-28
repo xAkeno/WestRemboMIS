@@ -27,7 +27,7 @@ class DocumentUpload extends Model
         'file_size'   => 'integer',
     ];
  
-    // ── Slot definitions (mirrors the React Hey frontend exactly) ──────────────────
+    // ── Slot definitions (mirrors the Reactfrontend exactly) ──────────────────
     public const SLOTS = [
         'personal_id' => [
             'valid_id_front'      => ['label' => 'Valid Government ID (Front)', 'required' => true],
