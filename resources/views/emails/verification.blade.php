@@ -172,8 +172,8 @@
 
         {{-- ── Header ── --}}
         <div class="header">
-            <div class="logo-circle">
-                <span>W</span>
+            <div class="logo-circle" style="overflow:hidden;padding:0;">
+                <img src="{{ $message->embed(public_path('images/West_Rembo_Logo.png')) }}" width="64" height="64" style="display:block;object-fit:cover;border-radius:50%;" alt="West Rembo Logo" />
             </div>
             <p class="header-eyebrow">Republic of the Philippines · City of Taguig</p>
             <h1 class="header-title">Barangay West Rembo</h1>

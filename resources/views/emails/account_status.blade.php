@@ -363,14 +363,18 @@
       <!-- Hero -->
       @if($status === 'approved')
       <div class="hero hero-approved">
-        <div class="hero-icon hero-icon-approved">✓</div>
+          <div class="hero-icon hero-icon-approved" style="overflow:hidden;padding:4px;">
+            <img src="{{ $message->embed(public_path('images/West_Rembo_Logo.png')) }}" width="48" height="48" style="display:block;object-fit:contain;border-radius:8px;" alt="West Rembo Logo" />
+          </div>
         <div class="hero-eyebrow hero-eyebrow-approved">Account Notification</div>
         <div class="hero-title">Your Account<br>Has Been Approved</div>
         <div class="hero-sub">{{ now()->format('F j, Y \a\t g:i A') }}</div>
       </div>
       @else
       <div class="hero hero-rejected">
-        <div class="hero-icon hero-icon-rejected">✕</div>
+        <div class="hero-icon hero-icon-rejected" style="overflow:hidden;padding:4px;">
+          <img src="{{ $message->embed(public_path('images/West_Rembo_Logo.png')) }}" width="48" height="48" style="display:block;object-fit:contain;border-radius:8px;" alt="West Rembo Logo" />
+        </div>
         <div class="hero-eyebrow hero-eyebrow-rejected">Account Notification</div>
         <div class="hero-title">Account<br>Not Approved</div>
         <div class="hero-sub">{{ now()->format('F j, Y \a\t g:i A') }}</div>

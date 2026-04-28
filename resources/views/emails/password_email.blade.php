@@ -17,7 +17,9 @@
                     <!-- Header -->
                     <tr>
                         <td style="background:linear-gradient(135deg,#0a1628 0%,#1e3a8a 100%);padding:36px 40px 28px;text-align:center;">
-                            <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:64px;height:64px;line-height:64px;font-size:28px;margin-bottom:16px;">🏛️</div>
+                            <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:64px;height:64px;line-height:64px;margin-bottom:16px;overflow:hidden;">
+                                <img src="{{ $message->embed(public_path('images/West_Rembo_Logo.png')) }}" width="64" height="64" style="display:block;object-fit:cover;border-radius:50%;" alt="West Rembo Logo" />
+                            </div>
                             <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:0.3px;">Barangay Document System</h1>
                             <p style="margin:6px 0 0;color:rgba(255,255,255,0.70);font-size:13px;">Official Document Management Portal</p>
                         </td>

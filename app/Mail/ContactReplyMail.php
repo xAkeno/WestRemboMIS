@@ -12,17 +12,21 @@ class ContactReplyMail extends Mailable
     public $name;
     public $replyMessage;
     public $topic;
+    // public $logoSrc;
 
     public function __construct($name, $topic, $replyMessage)
     {
         $this->name = $name;
         $this->topic = $topic;
         $this->replyMessage = $replyMessage;
+
+        
     }
 
     public function build()
     {
         return $this->subject('Re: ' . $this->topic)
                     ->view('emails.contact_reply');
+    
     }
 }

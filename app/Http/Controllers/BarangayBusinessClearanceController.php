@@ -120,34 +120,53 @@ class BarangayBusinessClearanceController extends Controller
         $filter = $request->filter_date ?? 'month';
         $from   = $request->from ?? null;
         $to     = $request->to   ?? null;
-
-        $query = BarangayBusinessClearance::query();
-
+ 
+        $query = BarangayCertificate::query();
+ 
         if ($from && $to) {
+            // Custom date range: group by calendar date
+            // DATE(created_at) works in PostgreSQL too, but TO_CHAR gives a
+            // consistent string format that JavaScript can sort reliably.
             $query->whereBetween('created_at', [$from . ' 00:00:00', $to . ' 23:59:59'])
-                  ->selectRaw('DATE(created_at) as period, COUNT(*) as count')
+                  ->selectRaw("TO_CHAR(created_at, 'YYYY-MM-DD') as period, COUNT(*) as count")
                   ->groupBy('period')
                   ->orderBy('period');
         } else {
             if ($filter === 'week') {
+                // Group by ISO day-of-week (1 = Monday … 7 = Sunday) so ordering
+                // is deterministic, but expose the day name as the chart label.
                 $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
-                      ->selectRaw('DAYOFWEEK(created_at) as day_num, DAYNAME(created_at) as period, COUNT(*) as count')
+                      ->selectRaw(
+                          "EXTRACT(ISODOW FROM created_at)::int AS day_num, " .
+                          "TO_CHAR(created_at, 'Dy') AS period, "             .
+                          "COUNT(*) AS count"
+                      )
                       ->groupBy('day_num', 'period')
                       ->orderBy('day_num');
+ 
             } elseif ($filter === 'month') {
+                // Group by day-of-month number (1–31).
                 $query->whereMonth('created_at', now()->month)
                       ->whereYear('created_at', now()->year)
-                      ->selectRaw('DAY(created_at) as period, COUNT(*) as count')
+                      ->selectRaw(
+                          "EXTRACT(DAY FROM created_at)::int AS period, COUNT(*) AS count"
+                      )
                       ->groupBy('period')
                       ->orderBy('period');
+ 
             } elseif ($filter === 'year') {
+                // Group by month number, expose month name as the chart label.
                 $query->whereYear('created_at', now()->year)
-                      ->selectRaw('MONTH(created_at) as month_num, MONTHNAME(created_at) as period, COUNT(*) as count')
+                      ->selectRaw(
+                          "EXTRACT(MONTH FROM created_at)::int AS month_num, " .
+                          "TO_CHAR(created_at, 'Mon') AS period, "             .
+                          "COUNT(*) AS count"
+                      )
                       ->groupBy('month_num', 'period')
                       ->orderBy('month_num');
             }
         }
-
+ 
         return response()->json([
             'status' => 'success',
             'data'   => $query->get(),

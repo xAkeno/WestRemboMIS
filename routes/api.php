@@ -41,7 +41,6 @@ Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
 Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::post('/resend-verification-code', [AuthController::class, 'resendVerificationCode']);
 Route::post('/resend-password-reset-code', [AuthController::class, 'resendPasswordResetCode']);
-Route::post('/logout', [AuthController::class, 'logout']);
 Route::post('/kiosk/submit', [KioskController::class, 'submit']);
 Route::post('/register', [AuthController::class, 'register']);
 
@@ -98,6 +97,9 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
         Route::post('/update', [SettingController::class, 'update']);
     });
 
+    // - logout test -
+    Route::post('/logout', [AuthController::class, 'logout']);
+    
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/test-embedding', [AIController::class, 'embedTest']);
     Route::get('/getAllUser', [AuthController::class, 'index']);
@@ -261,9 +263,8 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/backup', [BackupController::class, 'listBackups']);
 
     Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
-
+    Route::post('/backup/restore-upload', [BackupController::class, 'restoreFromUpload']);
     Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
-
     // ─── DocumentController (admin: templates / layouts) ─────────────────────
     Route::get('/documents/admin',        [DocumentController::class, 'index']);
     Route::post('/documents/admin',       [DocumentController::class, 'store']);
