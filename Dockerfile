@@ -19,7 +19,12 @@ RUN apt-get update && apt-get install -y \
     libgmp-dev \
     libonig-dev \
     libxml2-dev \
-    postgresql-client \
+    wget \
+    gnupg \
+    && echo "deb http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
+    && apt-get update \
+    && apt-get install -y postgresql-client-18 \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo \
