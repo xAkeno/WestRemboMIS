@@ -79,14 +79,6 @@ class ScheduleController extends Controller
             'time_group'      => 'required|in:morning,afternoon',
         ]);
 
-        // ❌ Prevent duplicate schedule
-        if (Schedule::where('document_number', $request->document_number)->exists()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'This document already has a schedule.',
-            ], 422);
-        }
-
         $group = $request->time_group;
 
         // ✅ Count how many already in that group
@@ -137,7 +129,6 @@ class ScheduleController extends Controller
             ]
         ], 201);
     }
-
     /*
     |--------------------------------------------------------------------------
     | 🟢 RESCHEDULE

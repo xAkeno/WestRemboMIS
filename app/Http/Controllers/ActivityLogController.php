@@ -9,9 +9,15 @@ class ActivityLogController extends Controller
 {
     public function index(Request $request)
     {
-        $query = ActivityLogger::query()->orderBy('created_at', 'desc');
+        $query = ActivityLogger::query()
+            ->orderBy('created_at', 'desc');
 
-        // Search by user_name, user_email, action, or description
+        // 🔥 FILTER BY DOCUMENT (IMPORTANT PART)
+        if ($request->filled('document_id')) {
+            $query->where('document_id', $request->document_id);
+        }
+
+        // Search logs
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -28,8 +34,9 @@ class ActivityLogController extends Controller
         }
 
         $perPage = $request->get('per_page', 20);
-        $logs = $query->paginate($perPage);
 
-        return response()->json($logs);
+        return response()->json(
+            $query->paginate($perPage)
+        );
     }
 }
