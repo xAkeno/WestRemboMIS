@@ -121,7 +121,7 @@ class BarangayBusinessClearanceController extends Controller
         $from   = $request->from ?? null;
         $to     = $request->to   ?? null;
  
-        $query = BarangayCertificate::query();
+        $query = BarangayBusinessClearance::query();
  
         if ($from && $to) {
             // Custom date range: group by calendar date
