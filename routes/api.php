@@ -33,7 +33,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\NotificationController;
-
+use App\Http\Controllers\QueueController;
 // ─── Public routes ──────────────────────────────────────────────────────────
 Route::post('/login', [AuthController::class, 'supabaseLogin']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -68,6 +68,19 @@ Route::middleware('verified')->get('/dashboard', function () {
 Route::apiResource('barangay-certificates', BarangaCertificateController::class);
 Route::get('settings/', [SettingController::class, 'index']);
 
+Route::prefix('queue')->group(function () {
+    // GET routes
+    Route::get('/', [QueueController::class, 'index']);
+    Route::get('/search-bcert', [QueueController::class, 'searchBcert']);
+    
+    // POST routes
+    Route::post('/manual-add', [QueueController::class, 'manualAdd']);
+    Route::post('/next', [QueueController::class, 'next']);
+    Route::post('/{id}/done', [QueueController::class, 'done']);
+    
+    // DELETE routes
+    Route::delete('/cleanup', [QueueController::class, 'cleanup']);
+});
 
 // ─── Authenticated routes ────────────────────────────────────────────────────
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
@@ -139,6 +152,8 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::patch('/tickets/{ticket}/status', [TicketController::class, 'updateStatus']);
     Route::post('/tickets/{ticket}/remarks', [TicketController::class, 'addRemark']);
     Route::post('/tickets/update-by-service/{ticketNumber}', [TicketController::class, 'findByTicketNumberAndUpdateStatus']);
+
+    Route::delete('/users/{id}', [AuthController::class, 'deleteUser']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::patch('/notifications/{id}/read', [NotificationController::class, 'markRead']);
@@ -244,7 +259,9 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     // Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
 
     Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
+
     Route::get('/backup', [BackupController::class, 'listBackups']);
+
     Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
     Route::post('/backup/restore-upload', [BackupController::class, 'restoreFromUpload']);
     Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);

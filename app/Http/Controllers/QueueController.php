@@ -3,208 +3,274 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Queue;
-use App\Models\ResidentRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
+use App\Models\QueueItem;
+use App\Models\BarangayClearance;
+use App\Models\BarangayCertificate;
+use App\Models\BarangayBuildingClearance;
+use App\Models\BarangayBusinessClearance;
+
 class QueueController extends Controller
 {
-    // ─── ENTRY POINTS ────────────────────────────────────────────────
+    private array $sources = [
+        'barangay_clearance' => [
+            'model' => BarangayClearance::class,
+            'ref'   => 'bcert_number',
+        ],
+        'barangay_certificate' => [
+            'model' => BarangayCertificate::class,
+            'ref'   => 'bcert_number',
+        ],
+        'building_clearance' => [
+            'model' => BarangayBuildingClearance::class,
+            'ref'   => 'bcert_number',
+        ],
+        'business_clearance' => [
+            'model' => BarangayBusinessClearance::class,
+            'ref'   => 'brgy_business_no',
+        ],
+    ];
 
-    /**
-     * Add an approved resident to the queue.
-     * Called after staff approval or kiosk validation.
-     */
-    public function addToQueue(Request $request)
+    // ─────────────────────────────────────────────
+    // GET QUEUE (TODAY ONLY)
+    // ─────────────────────────────────────────────
+
+    public function index()
     {
-        $req = ResidentRequest::findOrFail($request->request_id);
+        $queue = QueueItem::whereDate('queue_date', today())
+            ->where('status', '!=', 'done')
+            ->orderBy('id')
+            ->get();
 
-        // Same-day: mark approved_at so the 30-min window can be tracked
-        $approvedAt = $req->type === 'same_day' ? now() : null;
-
-        $entry = Queue::create([
-            'resident_id'   => $req->resident_id,
-            'request_id'    => $req->id,
-            'ticket_number' => $this->generateTicketNumber(),
-            'type'          => $req->type,
-            'status'        => 'waiting',
-            'position'      => $this->nextPosition(),
-            'approved_at'   => $approvedAt,
-            'queue_date'    => today(),
+        return response()->json([
+            'status' => 'success',
+            'data'   => $queue
         ]);
-
-        return response()->json($entry, 201);
     }
 
-    // ─── CORE QUEUE OPERATIONS ───────────────────────────────────────
+    // ─────────────────────────────────────────────
+    // SEARCH BCERT NUMBER (For Manual/QR Add)
+    // ─────────────────────────────────────────────
 
-    /**
-     * Call the next waiting resident.
-     * Sets status to 'called' and records the timestamp.
-     */
-    public function callNext()
+    public function searchBcert(Request $request)
     {
-        $next = Queue::where('queue_date', today())
-            ->where('status', 'waiting')
-            ->orderBy('position')
+        $request->validate([
+            'bcert_number' => 'required|string',
+            'document_type' => 'required|string'
+        ]);
+
+        $config = $this->sources[$request->document_type] ?? null;
+        
+        if (!$config) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid document type'
+            ], 400);
+        }
+
+        $refField = $config['ref'];
+        $item = $config['model']::where($refField, $request->bcert_number)
             ->first();
 
-        if (! $next) {
-            return response()->json(['message' => 'Queue is empty'], 200);
+        if (!$item) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No document found with that reference number'
+            ], 404);
         }
 
-        $next->update([
-            'status'    => 'called',
-            'called_at' => now(),
+        // Check if document was released today (using updated_at)
+        $isReleasedToday = $item->status === 'RELEASED' && 
+                           Carbon::parse($item->updated_at)->isToday();
+
+        if (!$isReleasedToday) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Document was not released today. Only today\'s released documents can be added to queue.',
+                'data' => [
+                    'released_date' => Carbon::parse($item->updated_at)->toDateString(),
+                    'status' => $item->status
+                ]
+            ], 400);
+        }
+
+        // Check if already in queue today
+        $alreadyInQueue = QueueItem::where('document_type', $request->document_type)
+            ->where('document_id', $item->id)
+            ->whereDate('queue_date', today())
+            ->whereIn('status', ['waiting', 'serving'])
+            ->exists();
+
+        $alreadyDone = QueueItem::where('document_type', $request->document_type)
+            ->where('document_id', $item->id)
+            ->whereDate('queue_date', today())
+            ->where('status', 'done')
+            ->exists();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'id' => $item->id,
+                'reference_number' => $item->{$refField},
+                'applicant_name' => $this->getApplicantName($item),
+                'business_name' => $item->business_name ?? $item->establishment ?? null,
+                'already_in_queue' => $alreadyInQueue,
+                'already_done' => $alreadyDone,
+                'released_date' => Carbon::parse($item->updated_at)->toDateString()
+            ]
+        ]);
+    }
+
+    // ─────────────────────────────────────────────
+    // MANUAL ADD (For both Manual form and QR scan)
+    // ─────────────────────────────────────────────
+
+    public function manualAdd(Request $request)
+    {
+        $request->validate([
+            'document_type'    => 'required|string',
+            'document_id'      => 'required|integer',
+            'reference_number' => 'required|string',
+            'force'            => 'nullable|boolean'
         ]);
 
-        // Dispatch a job to auto-mark missed after 5 minutes
-        \App\Jobs\AutoMarkMissed::dispatch($next->id)
-            ->delay(now()->addMinutes(5));
+        $today = Carbon::today();
 
-        return response()->json($next);
-    }
+        $existing = QueueItem::where('document_type', $request->document_type)
+            ->where('document_id', $request->document_id)
+            ->whereDate('queue_date', $today)
+            ->first();
 
-    /**
-     * Skip the current resident — moves them to the back immediately.
-     */
-    public function skipUser(Queue $queue)
-    {
-        return $this->moveToBack($queue);
-    }
-
-    /**
-     * Move a resident to the back of today's queue.
-     * Increments missed_attempts; marks no-show if limit exceeded.
-     */
-    public function moveToBack(Queue $queue)
-    {
-        $queue->increment('missed_attempts');
-
-        if ($queue->missed_attempts >= 3) {
-            return $this->markAsNoShow($queue);
+        // If exists and force is true, delete the existing entry
+        if ($existing && $request->force) {
+            $existing->delete();
+        } 
+        // If exists and force is false, return error
+        elseif ($existing && !$request->force) {
+            $statusMessage = $existing->status === 'done' 
+                ? 'This document was already processed today. Use force option to add again.'
+                : 'Already in queue today. Use force option to requeue.';
+                
+            return response()->json([
+                'status' => 'error',
+                'message' => $statusMessage,
+                'data' => [
+                    'existing_status' => $existing->status,
+                    'reference_number' => $existing->reference_number
+                ]
+            ], 409);
         }
 
-        $queue->update([
-            'status'   => 'waiting',
-            'position' => $this->nextPosition(),
-            'called_at' => null,
+        // Create new queue entry
+        $queueItem = QueueItem::create([
+            'document_type'    => $request->document_type,
+            'document_id'      => $request->document_id,
+            'reference_number' => $request->reference_number,
+            'status'           => 'waiting',
+            'queue_date'       => $today,
+            'manual_added'     => true,
         ]);
 
         return response()->json([
-            'message'         => 'Moved to back of queue',
-            'missed_attempts' => $queue->missed_attempts,
-            'queue'           => $queue->fresh(),
+            'status' => 'success',
+            'message' => $existing ? 'Requeued successfully' : 'Added to queue successfully',
+            'data' => $queueItem
         ]);
     }
 
-    /**
-     * Mark a resident as completed.
-     */
-    public function markAsCompleted(Queue $queue)
+    // ─────────────────────────────────────────────
+    // NEXT (CALL NEXT IN LINE)
+    // ─────────────────────────────────────────────
+
+    public function next()
     {
-        $queue->update([
-            'status'     => 'completed',
-            'arrived_at' => $queue->arrived_at ?? now(),
-        ]);
+        DB::beginTransaction();
+        
+        try {
+            // Mark any currently-serving item back to waiting
+            QueueItem::whereDate('queue_date', today())
+                ->where('status', 'serving')
+                ->update(['status' => 'waiting']);
 
-        return response()->json(['message' => 'Marked as completed', 'queue' => $queue]);
-    }
+            $next = QueueItem::whereDate('queue_date', today())
+                ->where('status', 'waiting')
+                ->orderBy('id')
+                ->first();
 
-    /**
-     * Mark a resident as no-show after 3 missed attempts or full-day absence.
-     */
-    public function markAsNoShow(Queue $queue)
-    {
-        $queue->update(['status' => 'no_show']);
+            if (!$next) {
+                DB::commit();
+                return response()->json([
+                    'status' => 'empty',
+                    'message' => 'No queue available'
+                ]);
+            }
 
-        // Notify resident to reschedule (fire-and-forget)
-        // Notification::send($queue->resident, new RescheduleReminder($queue));
-
-        return response()->json([
-            'message' => 'Marked as no-show. Resident must reschedule.',
-            'queue'   => $queue,
-        ]);
-    }
-
-    /**
-     * Accommodate a late resident on the same day.
-     * Places them at the back; marks status as 'late'.
-     *
-     * Same-day rule: if approved_at exists and > 30 min ago, they're late.
-     * Scheduled/walk-in: accommodated if still same day.
-     */
-    public function requeueLateUser(Queue $queue)
-    {
-        $isLate = false;
-
-        if ($queue->type === 'same_day' && $queue->approved_at) {
-            $isLate = now()->diffInMinutes($queue->approved_at) > 30;
-        }
-
-        if ($queue->queue_date->isToday()) {
-            $queue->update([
-                'status'     => $isLate ? 'late' : 'waiting',
-                'position'   => $this->nextPosition(),
-                'arrived_at' => now(),
-            ]);
+            $next->update(['status' => 'serving']);
+            
+            DB::commit();
 
             return response()->json([
-                'message' => $isLate
-                    ? 'Late arrival accommodated — placed at back of queue.'
-                    : 'Resident requeued.',
-                'queue' => $queue->fresh(),
+                'status' => 'success',
+                'data'   => $next
             ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to call next'
+            ], 500);
         }
-
-        // Not the same day — must reschedule
-        return response()->json([
-            'message' => 'Resident did not appear today. Must reschedule.',
-        ], 422);
     }
 
-    // ─── DISPLAY / POLLING ───────────────────────────────────────────
+    // ─────────────────────────────────────────────
+    // DONE (MARK AS DONE)
+    // ─────────────────────────────────────────────
 
-    /** Current queue state for the display board */
-    public function nowServing()
+    public function done($id)
     {
-        $called = Queue::where('queue_date', today())
-            ->whereIn('status', ['called', 'processing'])
-            ->orderBy('position')
-            ->first();
+        $item = QueueItem::findOrFail($id);
 
-        $waiting = Queue::where('queue_date', today())
-            ->where('status', 'waiting')
-            ->orderBy('position')
-            ->get(['id', 'ticket_number', 'type', 'position']);
+        $item->update([
+            'status' => 'done'
+        ]);
 
         return response()->json([
-            'now_serving' => $called,
-            'upcoming'    => $waiting,
+            'status' => 'success',
+            'message' => 'Document marked as done'
         ]);
     }
 
-    // ─── HELPERS ─────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────
+    // CLEANUP OLD QUEUE ENTRIES (Optional - can be removed)
+    // ─────────────────────────────────────────────
 
-    private function nextPosition(): int
+    public function cleanup()
     {
-        return (Queue::where('queue_date', today())->max('position') ?? 0) + 1;
+        $today = Carbon::today();
+        $deleted = QueueItem::whereDate('queue_date', '<', $today)->delete();
+        
+        return response()->json([
+            'status' => 'success',
+            'message' => "Cleaned up {$deleted} old queue entries",
+            'data' => ['deleted' => $deleted]
+        ]);
     }
 
-    private function generateTicketNumber(): string
+    // ─────────────────────────────────────────────
+    // HELPER: Get applicant name from model
+    // ─────────────────────────────────────────────
+
+    private function getApplicantName($item)
     {
-        $prefix = match(now()->dayOfWeek) {
-            Carbon::MONDAY    => 'A',
-            Carbon::TUESDAY   => 'B',
-            Carbon::WEDNESDAY => 'C',
-            Carbon::THURSDAY  => 'D',
-            default           => 'E',
-        };
-
-        $count = Queue::whereDate('created_at', today())->count() + 1;
-
-        return $prefix . str_pad($count, 3, '0', STR_PAD_LEFT); // e.g. A001
+        $nameParts = [];
+        
+        if (isset($item->first_name)) $nameParts[] = $item->first_name;
+        if (isset($item->middle_name) && $item->middle_name) $nameParts[] = $item->middle_name;
+        if (isset($item->surname)) $nameParts[] = $item->surname;
+        
+        return !empty($nameParts) ? implode(' ', $nameParts) : 'N/A';
     }
 }
