@@ -104,7 +104,9 @@ class DashboardController extends Controller
 
         // ── Helper: build today's list for one model ──────────────────
         $todayList = function (string $modelClass, string $docNumberColumn, string $documentType) use ($todaySchedules) {
-            return $modelClass::all()
+            return $modelClass::query()
+                ->where('status', 'SCHEDULED')  // ← ADD THIS LINE
+                ->get()
                 ->filter(function ($item) use ($todaySchedules, $docNumberColumn, $documentType) {
                     $docNumber = $item->{$docNumberColumn};
                     return isset($todaySchedules[$docNumber])

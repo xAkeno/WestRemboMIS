@@ -271,14 +271,14 @@ class BarangaCertificateController extends Controller
          // ✅ Handle PAID
        if ($newStatus === 'PAID') {
             $record->issued_date = now();
-            $record->issued_at   = 'Barangay Hall';
-            $record->issued_on   = now();  // ✅ ADD THIS
+            // $record->issued_at   = 'Barangay Hall';
+            // $record->issued_on   = now();  // ✅ ADD THIS
         }
 
         if ($newStatus === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
-            $record->issued_at   = $record->issued_at ?? 'Barangay Hall';
-            $record->issued_on   = $record->issued_on ?? now();  // ✅ ADD THIS
+            // $record->issued_at   = $record->issued_at ?? 'Barangay Hall';
+            // $record->issued_on   = $record->issued_on ?? now();  // ✅ ADD THIS
             $record->expires_at  = now()->addMonths(6); // 12 months
         }
 
