@@ -121,48 +121,49 @@ class BarangayBuildingClearanceController extends Controller
         $query = BarangayBuildingClearance::query();
  
         if ($from && $to) {
-            // Custom date range: group by calendar date
-            // DATE(created_at) works in PostgreSQL too, but TO_CHAR gives a
-            // consistent string format that JavaScript can sort reliably.
-            $query->whereBetween('created_at', [$from . ' 00:00:00', $to . ' 23:59:59'])
-                  ->selectRaw("TO_CHAR(created_at, 'YYYY-MM-DD') as period, COUNT(*) as count")
+        // ✅ FIXED: Use EXTRACT(DAY...) for PostgreSQL compatibility
+        $query->whereBetween('created_at', [$from . ' 00:00:00', $to . ' 23:59:59'])
+              ->selectRaw("
+                  EXTRACT(DAY FROM created_at)::int as period, 
+                  TO_CHAR(created_at, 'YYYY-MM-DD') as full_date,
+                  COUNT(*) as count
+              ")
+              ->groupBy('period', 'full_date')
+              ->orderBy('period');
+    } else {
+        if ($filter === 'week') {
+            // Group by ISO day-of-week (1 = Monday … 7 = Sunday)
+            $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
+                  ->selectRaw(
+                      "EXTRACT(ISODOW FROM created_at)::int AS day_num, " .
+                      "TO_CHAR(created_at, 'Dy') AS period, "             .
+                      "COUNT(*) AS count"
+                  )
+                  ->groupBy('day_num', 'period')
+                  ->orderBy('day_num');
+
+        } elseif ($filter === 'month') {
+            // Group by day-of-month number (1–31)
+            $query->whereMonth('created_at', now()->month)
+                  ->whereYear('created_at', now()->year)
+                  ->selectRaw(
+                      "EXTRACT(DAY FROM created_at)::int AS period, COUNT(*) AS count"
+                  )
                   ->groupBy('period')
                   ->orderBy('period');
-        } else {
-            if ($filter === 'week') {
-                // Group by ISO day-of-week (1 = Monday … 7 = Sunday) so ordering
-                // is deterministic, but expose the day name as the chart label.
-                $query->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])
-                      ->selectRaw(
-                          "EXTRACT(ISODOW FROM created_at)::int AS day_num, " .
-                          "TO_CHAR(created_at, 'Dy') AS period, "             .
-                          "COUNT(*) AS count"
-                      )
-                      ->groupBy('day_num', 'period')
-                      ->orderBy('day_num');
- 
-            } elseif ($filter === 'month') {
-                // Group by day-of-month number (1–31).
-                $query->whereMonth('created_at', now()->month)
-                      ->whereYear('created_at', now()->year)
-                      ->selectRaw(
-                          "EXTRACT(DAY FROM created_at)::int AS period, COUNT(*) AS count"
-                      )
-                      ->groupBy('period')
-                      ->orderBy('period');
- 
-            } elseif ($filter === 'year') {
-                // Group by month number, expose month name as the chart label.
-                $query->whereYear('created_at', now()->year)
-                      ->selectRaw(
-                          "EXTRACT(MONTH FROM created_at)::int AS month_num, " .
-                          "TO_CHAR(created_at, 'Mon') AS period, "             .
-                          "COUNT(*) AS count"
-                      )
-                      ->groupBy('month_num', 'period')
-                      ->orderBy('month_num');
-            }
+
+        } elseif ($filter === 'year') {
+            // Group by month number, expose month name as the chart label
+            $query->whereYear('created_at', now()->year)
+                  ->selectRaw(
+                      "EXTRACT(MONTH FROM created_at)::int AS month_num, " .
+                      "TO_CHAR(created_at, 'Mon') AS period, "             .
+                      "COUNT(*) AS count"
+                  )
+                  ->groupBy('month_num', 'period')
+                  ->orderBy('month_num');
         }
+    }
  
         return response()->json([
             'status' => 'success',
