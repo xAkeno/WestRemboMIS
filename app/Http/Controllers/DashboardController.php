@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\JsonResponse;
 use App\Http\Controllers\BarangayClearanceController;
 use App\Http\Controllers\BarangayBusinessClearanceController;
 use App\Http\Controllers\BarangayBuildingClearanceController;
 use App\Http\Controllers\BarangaCertificateController;
 use Illuminate\Http\Request;
-use App\Models\Ticket;
 use App\Models\BarangayClearance;
 use App\Models\BarangayBusinessClearance;
 use App\Models\BarangayBuildingClearance;
@@ -39,21 +37,6 @@ class DashboardController extends Controller
             'Building Clearance'   => BarangayBuildingClearance::whereIn('status', $pendingStatuses)->count(),
             'Barangay Certificate' => BarangayCertificate::whereIn('status', $pendingStatuses)->count(),
         ];
-
-        // ── Ticket Queue ─────────────────────────────────────────────
-        $tickets = Ticket::with('serviceable')
-            ->whereIn('status', ['Pending', 'Encoded', 'called', 'waiting', 'processing', 'late'])
-            ->orderByRaw("FIELD(status, 'Pending', 'Encoded')")
-            ->orderByRaw("FIELD(priority, 'High', 'Normal', 'Low')")
-            ->orderBy('submitted_at', 'asc')
-            ->get();
-
-        // ── Now Serving ──────────────────────────────────────────────
-        $nowServing = Ticket::with('serviceable')
-            ->where('status', 'Pending')
-            ->orderByRaw("FIELD(priority, 'High', 'Normal', 'Low')")
-            ->orderBy('submitted_at', 'asc')
-            ->first();
 
         // ── Notifications ─────────────────────────────────────────────
         $notifications = Notification::latest()->take(20)->get()->map(function ($n) {
@@ -125,8 +108,6 @@ class DashboardController extends Controller
 
                 // ── Meta ────────────────────────────────────────────
                 'pending_counts'       => $pendingCounts,
-                'tickets'              => $tickets,
-                'now_serving'          => $nowServing,
                 'notifications'        => $notifications,
                 'latest_activities'    => $latestActivities,
                 'total_released_today' => $totalReleasedToday,
