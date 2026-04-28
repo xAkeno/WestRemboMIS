@@ -621,8 +621,11 @@ class AuthController extends Controller
 
         if ($user) {
             $user->update(['status' => 'inactive']);
-            if ($request->user()->currentAccessToken()) {
-                $request->user()->currentAccessToken()->delete();
+            
+            // Guard against null token
+            $token = $request->user()->currentAccessToken();
+            if ($token) {
+                $token->delete();
             }
         }
 
