@@ -19,10 +19,6 @@ RUN apt-get update && apt-get install -y \
     libgmp-dev \
     libonig-dev \
     libxml2-dev \
-    wget \
-    gnupg \
-    ca-certificates \
-    postgresql-client \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo \
@@ -43,6 +39,10 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # Copy project
 # =========================
 COPY . .
+
+# 🔥 IMPORTANT FIX (ADD THIS)
+RUN php -m | grep gd
+RUN php -m | grep gmp
 
 # =========================
 # Install dependencies
