@@ -69,13 +69,19 @@ Route::middleware('verified')->get('/dashboard', function () {
 Route::apiResource('barangay-certificates', BarangaCertificateController::class);
 Route::get('settings/', [SettingController::class, 'index']);
 
-Route::get('/queue', [QueueController::class, 'index']);
-Route::post('/queue/auto-add', [QueueController::class, 'autoAdd']);
-Route::post('/queue/manual-add', [QueueController::class, 'manualAdd']);
-Route::post('/queue/next', [QueueController::class, 'next']);
-Route::post('/queue/{id}/done', [QueueController::class, 'done']);
-Route::post('/queue/requeue', [QueueController::class, 'requeue']);
-Route::get('/queue/now-serving', [QueueController::class, 'nowServing']);
+Route::prefix('queue')->group(function () {
+    // GET routes
+    Route::get('/', [QueueController::class, 'index']);
+    Route::get('/search-bcert', [QueueController::class, 'searchBcert']);
+    
+    // POST routes
+    Route::post('/manual-add', [QueueController::class, 'manualAdd']);
+    Route::post('/next', [QueueController::class, 'next']);
+    Route::post('/{id}/done', [QueueController::class, 'done']);
+    
+    // DELETE routes
+    Route::delete('/cleanup', [QueueController::class, 'cleanup']);
+});
 
 // ─── Authenticated routes ────────────────────────────────────────────────────
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
@@ -241,14 +247,22 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
 
     // =========================================================================
 
+    // Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
+    // Route::get('/backup', [BackupController::class, 'listBackups']);
+    // Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
+    // Route::get('/backup/settings', [BackupController::class, 'getSettings']);
+    // Route::post('/backup/settings', [BackupController::class, 'saveSettings']);
+    // Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
+    // Route::post('/backup/restore-upload', [BackupController::class, 'restoreUpload']);
+    // Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
+
     Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
+
     Route::get('/backup', [BackupController::class, 'listBackups']);
+
     Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
-    Route::get('/backup/settings', [BackupController::class, 'getSettings']);
-    Route::post('/backup/settings', [BackupController::class, 'saveSettings']);
+
     Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
-    Route::post('/backup/restore-upload', [BackupController::class, 'restoreUpload']);
-    Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
 
     // ─── DocumentController (admin: templates / layouts) ─────────────────────
     Route::get('/documents/admin',        [DocumentController::class, 'index']);

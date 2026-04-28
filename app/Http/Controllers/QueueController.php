@@ -15,10 +15,6 @@ use App\Models\BarangayBusinessClearance;
 
 class QueueController extends Controller
 {
-    // ─────────────────────────────────────────────
-    // CONFIG SOURCES
-    // ─────────────────────────────────────────────
-
     private array $sources = [
         'barangay_clearance' => [
             'model' => BarangayClearance::class,
@@ -34,7 +30,7 @@ class QueueController extends Controller
         ],
         'business_clearance' => [
             'model' => BarangayBusinessClearance::class,
-            'ref'   => 'brgy_business_no',       // ← different ref field
+            'ref'   => 'brgy_business_no',
         ],
     ];
 
@@ -56,56 +52,88 @@ class QueueController extends Controller
     }
 
     // ─────────────────────────────────────────────
-    // AUTO ADD RELEASED TODAY
+    // SEARCH BCERT NUMBER (For Manual/QR Add)
     // ─────────────────────────────────────────────
 
-    public function autoAdd()
+    public function searchBcert(Request $request)
     {
-        foreach ($this->sources as $type => $config) {
-            $refField = $config['ref'];   // bcert_number OR brgy_business_no
+        $request->validate([
+            'bcert_number' => 'required|string',
+            'document_type' => 'required|string'
+        ]);
 
-            // FIX: filter by the correct ref field per document type,
-            // not a hardcoded 'bcert_number' for all types.
-            $items = $config['model']::where('status', 'RELEASED')
-                ->whereNotNull($refField)
-                ->get();
-
-            foreach ($items as $item) {
-
-                $exists = QueueItem::where('document_type', $type)
-                    ->where('document_id', $item->id)
-                    ->whereIn('status', ['waiting', 'serving'])
-                    ->exists();
-
-                if ($exists) continue;
-
-                QueueItem::create([
-                    'document_type'    => $type,
-                    'document_id'      => $item->id,
-                    'reference_number' => $item->{$refField} ?? "#{$item->id}",
-                    'status'           => 'waiting',
-                    'queue_date'       => now()->toDateString(),
-                    'manual_added'     => false,
-                ]);
-            }
+        $config = $this->sources[$request->document_type] ?? null;
+        
+        if (!$config) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid document type'
+            ], 400);
         }
 
+        $refField = $config['ref'];
+        $item = $config['model']::where($refField, $request->bcert_number)
+            ->first();
+
+        if (!$item) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No document found with that reference number'
+            ], 404);
+        }
+
+        // Check if document was released today (using updated_at)
+        $isReleasedToday = $item->status === 'RELEASED' && 
+                           Carbon::parse($item->updated_at)->isToday();
+
+        if (!$isReleasedToday) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Document was not released today. Only today\'s released documents can be added to queue.',
+                'data' => [
+                    'released_date' => Carbon::parse($item->updated_at)->toDateString(),
+                    'status' => $item->status
+                ]
+            ], 400);
+        }
+
+        // Check if already in queue today
+        $alreadyInQueue = QueueItem::where('document_type', $request->document_type)
+            ->where('document_id', $item->id)
+            ->whereDate('queue_date', today())
+            ->whereIn('status', ['waiting', 'serving'])
+            ->exists();
+
+        $alreadyDone = QueueItem::where('document_type', $request->document_type)
+            ->where('document_id', $item->id)
+            ->whereDate('queue_date', today())
+            ->where('status', 'done')
+            ->exists();
+
         return response()->json([
-            'status'  => 'success',
-            'message' => 'Queue generated from all released documents'
+            'status' => 'success',
+            'data' => [
+                'id' => $item->id,
+                'reference_number' => $item->{$refField},
+                'applicant_name' => $this->getApplicantName($item),
+                'business_name' => $item->business_name ?? $item->establishment ?? null,
+                'already_in_queue' => $alreadyInQueue,
+                'already_done' => $alreadyDone,
+                'released_date' => Carbon::parse($item->updated_at)->toDateString()
+            ]
         ]);
     }
 
     // ─────────────────────────────────────────────
-    // MANUAL ADD (WITH DUPLICATE CONTROL + REQUEUE)
+    // MANUAL ADD (For both Manual form and QR scan)
     // ─────────────────────────────────────────────
 
     public function manualAdd(Request $request)
     {
         $request->validate([
-            'document_type'    => 'required',
-            'document_id'      => 'required',
-            'reference_number' => 'required',
+            'document_type'    => 'required|string',
+            'document_id'      => 'required|integer',
+            'reference_number' => 'required|string',
             'force'            => 'nullable|boolean'
         ]);
 
@@ -116,18 +144,28 @@ class QueueController extends Controller
             ->whereDate('queue_date', $today)
             ->first();
 
-        if ($existing && !$request->force) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Already in queue today'
-            ]);
-        }
-
+        // If exists and force is true, delete the existing entry
         if ($existing && $request->force) {
             $existing->delete();
+        } 
+        // If exists and force is false, return error
+        elseif ($existing && !$request->force) {
+            $statusMessage = $existing->status === 'done' 
+                ? 'This document was already processed today. Use force option to add again.'
+                : 'Already in queue today. Use force option to requeue.';
+                
+            return response()->json([
+                'status' => 'error',
+                'message' => $statusMessage,
+                'data' => [
+                    'existing_status' => $existing->status,
+                    'reference_number' => $existing->reference_number
+                ]
+            ], 409);
         }
 
-        QueueItem::create([
+        // Create new queue entry
+        $queueItem = QueueItem::create([
             'document_type'    => $request->document_type,
             'document_id'      => $request->document_id,
             'reference_number' => $request->reference_number,
@@ -138,7 +176,8 @@ class QueueController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Added to queue'
+            'message' => $existing ? 'Requeued successfully' : 'Added to queue successfully',
+            'data' => $queueItem
         ]);
     }
 
@@ -148,34 +187,46 @@ class QueueController extends Controller
 
     public function next()
     {
-        // Mark any currently-serving item back to waiting first,
-        // so only one item is ever in "serving" state at a time.
-        QueueItem::whereDate('queue_date', today())
-            ->where('status', 'serving')
-            ->update(['status' => 'waiting']);
+        DB::beginTransaction();
+        
+        try {
+            // Mark any currently-serving item back to waiting
+            QueueItem::whereDate('queue_date', today())
+                ->where('status', 'serving')
+                ->update(['status' => 'waiting']);
 
-        $next = QueueItem::whereDate('queue_date', today())
-            ->where('status', 'waiting')
-            ->orderBy('id')
-            ->first();
+            $next = QueueItem::whereDate('queue_date', today())
+                ->where('status', 'waiting')
+                ->orderBy('id')
+                ->first();
 
-        if (!$next) {
+            if (!$next) {
+                DB::commit();
+                return response()->json([
+                    'status' => 'empty',
+                    'message' => 'No queue available'
+                ]);
+            }
+
+            $next->update(['status' => 'serving']);
+            
+            DB::commit();
+
             return response()->json([
-                'status' => 'empty',
-                'message' => 'No queue available'
+                'status' => 'success',
+                'data'   => $next
             ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to call next'
+            ], 500);
         }
-
-        $next->update(['status' => 'serving']);
-
-        return response()->json([
-            'status' => 'success',
-            'data'   => $next
-        ]);
     }
 
     // ─────────────────────────────────────────────
-    // DONE (REMOVE FROM QUEUE ONLY)
+    // DONE (MARK AS DONE)
     // ─────────────────────────────────────────────
 
     public function done($id)
@@ -188,59 +239,38 @@ class QueueController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Removed from queue'
+            'message' => 'Document marked as done'
         ]);
     }
 
     // ─────────────────────────────────────────────
-    // REQUEUE (DESTROYED / NEEDS REQUEUE CASE)
+    // CLEANUP OLD QUEUE ENTRIES (Optional - can be removed)
     // ─────────────────────────────────────────────
 
-    public function requeue(Request $request)
+    public function cleanup()
     {
-        $request->validate([
-            'document_type' => 'required',
-            'document_id'   => 'required',
-        ]);
-
         $today = Carbon::today();
-
-        QueueItem::updateOrCreate(
-            [
-                'document_type' => $request->document_type,
-                'document_id'   => $request->document_id,
-                'queue_date'    => $today,
-            ],
-            [
-                'status'       => 'waiting',
-                'manual_added' => true,
-            ]
-        );
-
+        $deleted = QueueItem::whereDate('queue_date', '<', $today)->delete();
+        
         return response()->json([
             'status' => 'success',
-            'message' => 'Requeued successfully'
+            'message' => "Cleaned up {$deleted} old queue entries",
+            'data' => ['deleted' => $deleted]
         ]);
     }
 
     // ─────────────────────────────────────────────
-    // DISPLAY (NOW SERVING)
+    // HELPER: Get applicant name from model
     // ─────────────────────────────────────────────
 
-    public function nowServing()
+    private function getApplicantName($item)
     {
-        $current = QueueItem::whereDate('queue_date', today())
-            ->where('status', 'serving')
-            ->first();
-
-        $waiting = QueueItem::whereDate('queue_date', today())
-            ->where('status', 'waiting')
-            ->orderBy('id')
-            ->get();
-
-        return response()->json([
-            'now_serving' => $current,
-            'up_next'     => $waiting
-        ]);
+        $nameParts = [];
+        
+        if (isset($item->first_name)) $nameParts[] = $item->first_name;
+        if (isset($item->middle_name) && $item->middle_name) $nameParts[] = $item->middle_name;
+        if (isset($item->surname)) $nameParts[] = $item->surname;
+        
+        return !empty($nameParts) ? implode(' ', $nameParts) : 'N/A';
     }
 }
