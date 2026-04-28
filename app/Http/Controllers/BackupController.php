@@ -3,255 +3,222 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
-use App\Models\BackupSetting;
+use Illuminate\Support\Facades\Storage;
+
 class BackupController extends Controller
 {
-    protected $backupPath;
-
-    public function __construct()
-    {
-        $this->backupPath = storage_path('app/backups/');
-
-        if (!file_exists($this->backupPath)) {
-            mkdir($this->backupPath, 0777, true);
-        }
-    }
-
-    /* =========================
-       DATABASE BACKUP (FIXED)
-    ========================= */
+    /**
+     * ─────────────────────────────────────────────
+     * CREATE BACKUP (POSTGRES + OPTIONAL ENCRYPTION)
+     * ─────────────────────────────────────────────
+     */
     public function runDatabaseBackup()
     {
-        $backupDir = storage_path('app/backups/');
+        $dbName = env('DB_DATABASE');
+        $host   = env('DB_HOST');
+        $port   = env('DB_PORT', 5432);
+        $user   = env('DB_USERNAME');
+        $pass   = env('DB_PASSWORD');
 
-        if (!file_exists($backupDir)) {
-            mkdir($backupDir, 0777, true);
+        $date = now()->format('Y-m-d_H-i-s');
+        $fileName = "backup_{$dbName}_{$date}.sql";
+        $tempPath = storage_path("app/backups/{$fileName}");
+
+        // Ensure folder exists
+        if (!file_exists(storage_path('app/backups'))) {
+            mkdir(storage_path('app/backups'), 0777, true);
         }
 
-        $dbName = env('DB_DATABASE');
-        $date = now()->format('Y-m-d_H-i-s');
+        // Set password for pg_dump
+        putenv("PGPASSWORD={$pass}");
 
-        $fileName = "backup_{$dbName}_{$date}.sql";
-        $filePath = $backupDir . $fileName;
-
-        $host = env('DB_HOST');
-        $port = env('DB_PORT', 3306);
-        $user = env('DB_USERNAME');
-        $pass = env('DB_PASSWORD');
-
-        $command = "mysqldump -h {$host} -P {$port} -u {$user} --password={$pass} {$dbName} > \"{$filePath}\"";
-
+        // PostgreSQL dump command
+        $command = "pg_dump -h {$host} -p {$port} -U {$user} -F p {$dbName} > \"{$tempPath}\"";
         exec($command, $output, $result);
 
-        if ($result !== 0 || !file_exists($filePath) || filesize($filePath) < 100) {
+        if ($result !== 0 || !file_exists($tempPath)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Backup failed'
             ], 500);
         }
 
-        return response()->json([
-            'success' => true,
-            'file' => $fileName
-        ]);
-    }
+        // ───────────────────────────────
+        // OPTIONAL ENCRYPTION (toggle here)
+        // ───────────────────────────────
+        $encrypt = true;
 
-    public function getSettings()
-    {
-        // Always return a single row — create it with defaults if it doesn't exist yet
-        $setting = BackupSetting::firstOrCreate(
-            [],
-            [
-                'frequency' => 'daily',
-                'time'      => '02:00',
-                'enabled'   => true,
-            ]
-        );
- 
-        return response()->json([
-            'success'  => true,
-            'settings' => [
-                'id'          => $setting->id,
-                'enabled'     => $setting->enabled,
-                'frequency'   => $setting->frequency,
-                'time'        => $setting->time,
-                'day_of_week' => $setting->day_of_week ?? null,
-                'updated_at'  => $setting->updated_at,
-            ],
-        ]);
-    }
-    public function saveSettings(Request $request)
-    {
-        $validated = $request->validate([
-            'enabled'     => 'required|boolean',
-            'frequency'   => 'required|in:hourly,daily,weekly',
-            'time'        => 'nullable|date_format:H:i',
-            'day_of_week' => 'nullable|integer|min:0|max:6',
-        ]);
- 
-        // time is required when frequency is daily or weekly
-        if (in_array($validated['frequency'], ['daily', 'weekly']) && empty($validated['time'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Time is required for daily and weekly schedules.',
-            ], 422);
-        }
- 
-        // day_of_week is required when frequency is weekly
-        if ($validated['frequency'] === 'weekly' && is_null($validated['day_of_week'] ?? null)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Day of week is required for weekly schedules.',
-            ], 422);
-        }
- 
-        $setting = BackupSetting::first();
- 
-        if ($setting) {
-            $setting->update($validated);
-        } else {
-            $setting = BackupSetting::create($validated);
-        }
- 
-        return response()->json([
-            'success'  => true,
-            'message'  => 'Backup schedule saved successfully.',
-            'settings' => [
-                'id'          => $setting->id,
-                'enabled'     => $setting->enabled,
-                'frequency'   => $setting->frequency,
-                'time'        => $setting->time,
-                'day_of_week' => $setting->day_of_week ?? null,
-                'updated_at'  => $setting->updated_at,
-            ],
-        ]);
-    }
-    public function restoreUpload(Request $request)
-    {
-        $request->validate([
-            'file' => 'required|file|extensions:sql',
-        ]);
+        if ($encrypt) {
+            $key = env('BACKUP_ENCRYPTION_KEY');
 
-        $file = $request->file('file');
+            $sql = file_get_contents($tempPath);
 
-        $filePath = $file->storeAs(
-            'backups/temp',
-            $file->getClientOriginalName()
+            $encrypted = base64_encode(
+                openssl_encrypt(
+                    $sql,
+                    'AES-256-CBC',
+                    $key,
+                    0,
+                    substr($key, 0, 16)
+                )
+            );
+
+            $fileName = "backup_{$dbName}_{$date}.sql.enc";
+            $tempPath = storage_path("app/backups/{$fileName}");
+
+            file_put_contents($tempPath, $encrypted);
+        }
+
+        // ───────────────────────────────
+        // UPLOAD TO S3
+        // ───────────────────────────────
+        $s3Path = Storage::disk('s3')->putFileAs(
+            'backups',
+            new \Illuminate\Http\File($tempPath),
+            $fileName
         );
 
-        $fullPath = storage_path('app/' . $filePath);
-
-        $host = env('DB_HOST', '127.0.0.1');
-        $port = env('DB_PORT', 3306);
-        $user = env('DB_USERNAME');
-        $pass = env('DB_PASSWORD');
-        $db   = env('DB_DATABASE');
-
-        // ⚠️ IMPORTANT: safe restore command
-        $command = "mysql -h {$host} -P {$port} -u {$user} --password={$pass} {$db} < \"{$fullPath}\"";
-
-        exec($command, $output, $result);
-
-        if ($result !== 0) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Restore failed',
-                'debug' => $output
-            ], 500);
-        }
-
         return response()->json([
             'success' => true,
-            'message' => 'Database restored successfully',
+            'file'    => $fileName,
+            'path'    => $s3Path,
         ]);
     }
 
-    /* =========================
-       LIST BACKUPS (SORTED NEWEST FIRST)
-    ========================= */
-    public function listBackups()
-    {
-        $path = $this->backupPath;
-
-        if (!file_exists($path)) {
-            return response()->json(['success' => true, 'backups' => []]);
-        }
-
-        $files = collect(File::files($path))
-            ->sortByDesc(fn($file) => $file->getMTime());
-
-        $backups = [];
-
-        $latest = file_exists($path . "LATEST_BACKUP.txt")
-            ? trim(file_get_contents($path . "LATEST_BACKUP.txt"))
-            : null;
-
-        foreach ($files as $file) {
-            $name = $file->getFilename();
-
-            // skip system file
-            if ($name === "LATEST_BACKUP.txt") continue;
-
-            $backups[] = [
-                'name' => $name,
-                'size_kb' => round($file->getSize() / 1024, 2),
-                'last_modified' => date('Y-m-d H:i:s', $file->getMTime()),
-                'download_url' => url('/api/backup/' . $name . '/download'),
-                'is_latest' => $name === $latest,
-            ];
-        }
-
-        return response()->json([
-            'success' => true,
-            'latest' => $latest,
-            'backups' => $backups,
-        ]);
-    }
-
-    /* =========================
-       DOWNLOAD BACKUP
-    ========================= */
+    /**
+     * ─────────────────────────────────────────────
+     * DOWNLOAD BACKUP (OPTIONAL DECRYPT)
+     * ─────────────────────────────────────────────
+     */
     public function downloadBackup($fileName)
     {
-        $filePath = $this->backupPath . $fileName;
+        $path = storage_path("app/backups/{$fileName}");
 
-        if (!file_exists($filePath)) {
-            return response()->json(['message' => 'File not found'], 404);
-        }
-
-        return response()->download($filePath, $fileName, [
-            'Content-Type' => 'application/sql',
-        ]);
-    }
-
-    /* =========================
-       RESTORE BACKUP
-    ========================= */
-    public function restoreFromFile($fileName)
-    {
-        $filePath = $this->backupPath . $fileName;
-
-        if (!file_exists($filePath)) {
+        if (!file_exists($path)) {
             return response()->json([
                 'success' => false,
-                'message' => 'File not found',
+                'message' => 'File not found'
             ], 404);
         }
 
-        $host = env('DB_HOST', '127.0.0.1');
-        $port = env('DB_PORT', 3306);
-        $user = env('DB_USERNAME');
-        $pass = env('DB_PASSWORD');
-        $db   = env('DB_DATABASE');
+        $isEncrypted = str_ends_with($fileName, '.enc');
 
-        $command = "mysql -h {$host} -P {$port} -u {$user} --password={$pass} {$db} < \"{$filePath}\"";
+        $content = file_get_contents($path);
 
-        exec($command);
+        // Decrypt if needed
+        if ($isEncrypted) {
+            $key = env('BACKUP_ENCRYPTION_KEY');
+
+            $content = openssl_decrypt(
+                base64_decode($content),
+                'AES-256-CBC',
+                $key,
+                0,
+                substr($key, 0, 16)
+            );
+
+            if (!$content) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Decryption failed'
+                ], 500);
+            }
+        }
+
+        return response($content, 200, [
+            'Content-Type' => 'application/sql',
+            'Content-Disposition' => "attachment; filename={$fileName}.sql"
+        ]);
+    }
+
+    /**
+     * ─────────────────────────────────────────────
+     * RESTORE BACKUP (AUTO DETECT ENCRYPTED OR NOT)
+     * ─────────────────────────────────────────────
+     */
+    public function restoreFromFile($fileName)
+    {
+        $filePath = storage_path("app/backups/{$fileName}");
+
+        if (!file_exists($filePath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Backup file not found'
+            ], 404);
+        }
+
+        $dbName = env('DB_DATABASE');
+        $host   = env('DB_HOST');
+        $port   = env('DB_PORT', 5432);
+        $user   = env('DB_USERNAME');
+        $pass   = env('DB_PASSWORD');
+
+        $sqlToRun = $filePath;
+
+        // ───────────────────────────────
+        // IF ENCRYPTED → DECRYPT FIRST
+        // ───────────────────────────────
+        if (str_ends_with($fileName, '.enc')) {
+
+            $key = env('BACKUP_ENCRYPTION_KEY');
+
+            $encrypted = file_get_contents($filePath);
+
+            $decrypted = openssl_decrypt(
+                base64_decode($encrypted),
+                'AES-256-CBC',
+                $key,
+                0,
+                substr($key, 0, 16)
+            );
+
+            if (!$decrypted) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to decrypt backup'
+                ], 500);
+            }
+
+            $sqlToRun = storage_path("app/backups/temp_restore.sql");
+            file_put_contents($sqlToRun, $decrypted);
+        }
+
+        // ───────────────────────────────
+        // POSTGRES RESTORE COMMAND
+        // ───────────────────────────────
+        putenv("PGPASSWORD={$pass}");
+
+        $command = "psql -h {$host} -p {$port} -U {$user} -d {$dbName} < \"{$sqlToRun}\"";
+
+        exec($command, $output, $result);
+
+        return response()->json([
+            'success' => $result === 0,
+            'message' => $result === 0 ? 'Restore successful' : 'Restore failed',
+            'debug'   => $output,
+        ]);
+    }
+
+    /**
+     * ─────────────────────────────────────────────
+     * LIST BACKUPS (LOCAL OR S3 READY)
+     * ─────────────────────────────────────────────
+     */
+    public function listBackups()
+    {
+        $files = Storage::disk('s3')->files('backups');
+
+        $backups = collect($files)->map(function ($file) {
+            return [
+                'name' => basename($file),
+                'path' => $file,
+                'url'  => Storage::disk('s3')->url($file),
+            ];
+        });
 
         return response()->json([
             'success' => true,
-            'message' => 'Restore completed',
+            'backups' => $backups,
         ]);
     }
 }
