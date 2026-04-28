@@ -126,9 +126,9 @@ class BarangaCertificateController extends Controller
         $filter = $request->filter_date ?? 'month';
         $from   = $request->from ?? null;
         $to     = $request->to   ?? null;
-
+ 
         $query = BarangayCertificate::query();
-
+ 
         if ($from && $to) {
             // Custom date range: group by calendar date
             // DATE(created_at) works in PostgreSQL too, but TO_CHAR gives a
@@ -149,7 +149,7 @@ class BarangaCertificateController extends Controller
                       )
                       ->groupBy('day_num', 'period')
                       ->orderBy('day_num');
-
+ 
             } elseif ($filter === 'month') {
                 // Group by day-of-month number (1–31).
                 $query->whereMonth('created_at', now()->month)
@@ -159,7 +159,7 @@ class BarangaCertificateController extends Controller
                       )
                       ->groupBy('period')
                       ->orderBy('period');
-
+ 
             } elseif ($filter === 'year') {
                 // Group by month number, expose month name as the chart label.
                 $query->whereYear('created_at', now()->year)
@@ -172,7 +172,7 @@ class BarangaCertificateController extends Controller
                       ->orderBy('month_num');
             }
         }
-
+ 
         return response()->json([
             'status' => 'success',
             'data'   => $query->get(),
