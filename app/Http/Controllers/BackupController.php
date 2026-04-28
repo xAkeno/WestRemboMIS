@@ -88,6 +88,42 @@ class BackupController extends Controller
     }
 
     /**
+     * Strip SQL statements that require superuser privileges on managed
+     * PostgreSQL hosts (Render, Supabase, Railway, etc.)
+     */
+    private function stripPrivilegedStatements(string $sql): string
+    {
+        $patterns = [
+            // session_replication_role requires superuser
+            '/^SET\s+session_replication_role\s*=.*?;/im',
+            // default_transaction_read_only — superuser only
+            '/^SET\s+default_transaction_read_only.*?;/im',
+            // pg_catalog.set_config calls (emitted by pg_dump for superuser settings)
+            '/^SELECT\s+pg_catalog\.set_config\s*\(.*?\)\s*;/im',
+            // Role/ownership changes (OWNER TO, SET ROLE) — often denied
+            '/^ALTER\s+(?:TABLE|SEQUENCE|FUNCTION|SCHEMA|DATABASE)\s+.*?\s+OWNER\s+TO\s+\S+\s*;/im',
+            '/^SET\s+ROLE\s+.*?;/im',
+            // COMMENT ON EXTENSION — requires superuser on some hosts
+            '/^COMMENT\s+ON\s+EXTENSION\s+.*?;/im',
+            // CREATE EXTENSION — may fail if already exists; handle via IF NOT EXISTS below
+            // We'll keep CREATE EXTENSION but the try/catch will skip duplicates
+        ];
+
+        foreach ($patterns as $pattern) {
+            $sql = preg_replace($pattern, '', $sql);
+        }
+
+        // Replace "CREATE EXTENSION" without IF NOT EXISTS so duplicates don't hard-fail
+        $sql = preg_replace(
+            '/CREATE EXTENSION(?!\s+IF\s+NOT\s+EXISTS)\s+/i',
+            'CREATE EXTENSION IF NOT EXISTS ',
+            $sql
+        );
+
+        return $sql;
+    }
+
+    /**
      * SHARED RESTORE LOGIC — uses PDO, no shell exec
      */
     private function runRestore(string $sqlContent): \Illuminate\Http\JsonResponse
@@ -95,18 +131,13 @@ class BackupController extends Controller
         try {
             $pdo = $this->getPdo();
 
-            // ── Strip SET statements that require superuser on Render ──────────
-            $sql = preg_replace('/^SET\s+default_transaction_read_only.*?;/im', '', $sqlContent);
-            $sql = preg_replace('/^SELECT\s+pg_catalog\.set_config.*?;/im', '', $sql);
+            // Strip all statements that need superuser on managed Postgres hosts
+            $sql = $this->stripPrivilegedStatements($sqlContent);
 
-            // ── Split into individual statements ──────────────────────────────
-            // Handles $$ dollar-quoted blocks and semicolons properly
+            // Split into individual statements
             $statements = $this->splitSql($sql);
 
             $pdo->beginTransaction();
-
-            // Disable FK checks during restore
-            $pdo->exec('SET session_replication_role = replica;');
 
             $errors = [];
             foreach ($statements as $statement) {
@@ -121,15 +152,12 @@ class BackupController extends Controller
                 }
             }
 
-            // Re-enable FK checks
-            $pdo->exec('SET session_replication_role = DEFAULT;');
-
             $pdo->commit();
 
             return response()->json([
-                'success' => true,
-                'message' => 'Restore successful',
-                'warnings'=> $errors, // non-fatal errors
+                'success'  => true,
+                'message'  => 'Restore successful',
+                'warnings' => $errors, // non-fatal errors
             ]);
 
         } catch (PDOException $e) {
@@ -145,16 +173,16 @@ class BackupController extends Controller
     }
 
     /**
-     * Split SQL dump into individual statements
-     * Handles dollar-quoted strings ($$...$$) and regular semicolons
+     * Split SQL dump into individual statements.
+     * Handles dollar-quoted strings ($$...$$) and regular semicolons.
      */
     private function splitSql(string $sql): array
     {
-        $statements  = [];
-        $current     = '';
-        $inDollar    = false;
-        $dollarTag   = '';
-        $lines        = explode("\n", $sql);
+        $statements = [];
+        $current    = '';
+        $inDollar   = false;
+        $dollarTag  = '';
+        $lines      = explode("\n", $sql);
 
         foreach ($lines as $line) {
             // Skip pure comment lines
@@ -177,7 +205,7 @@ class BackupController extends Controller
                 }
             }
 
-            // Only split on semicolon if we're outside a dollar-quoted block
+            // Only split on semicolon if outside a dollar-quoted block
             if (!$inDollar && str_ends_with(trim($line), ';')) {
                 $statements[] = $current;
                 $current      = '';
