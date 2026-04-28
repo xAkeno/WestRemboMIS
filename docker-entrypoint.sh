@@ -1,31 +1,32 @@
 #!/bin/bash
 set -e
 
-echo "Creating storage symlink..."
-php artisan storage:link || echo "Link already exists"
+echo "▶ Caching config..."
+php artisan config:cache
 
-echo "Running migrations..."
-php artisan migrate --force --no-interaction || php artisan migrate:fresh --force
+echo "▶ Caching routes..."
+php artisan route:cache
 
+echo "▶ Caching views..."
+php artisan view:cache
 
-echo "Seeding default services..."
-php artisan db:seed --class=ServicesSeeder --force || echo "ServicesSeeder already run"
+echo "▶ Running migrations..."
+php artisan migrate --force --no-interaction
 
-echo "Seeding street data..."
-php artisan db:seed --class=StreetSeeder --force || echo "StreetSeeder already run"
+echo "▶ Seeding default services..."
+php artisan db:seed --class=ServicesSeeder --force || echo "ServicesSeeder skipped"
 
-echo "Seeding contact CMS..."
-php artisan db:seed --class=ContactCmsSeeder --force || echo "ContactCmsSeeder already run"
+echo "▶ Seeding street data..."
+php artisan db:seed --class=StreetSeeder --force || echo "StreetSeeder skipped"
 
-echo "Seeding service prices..."
-php artisan db:seed --class=ServicePriceSeeder --force || echo "ServicePriceSeeder already run"
+echo "▶ Seeding contact CMS..."
+php artisan db:seed --class=ContactCmsSeeder --force || echo "ContactCmsSeeder skipped"
 
-echo "Seeding settings..."
-php artisan db:seed --class=SettingSeeder --force || echo "SettingSeeder already run"
+echo "▶ Seeding service prices..."
+php artisan db:seed --class=ServicePriceSeeder --force || echo "ServicePriceSeeder skipped"
 
-echo "Clearing cache..."
-php artisan config:clear
-php artisan cache:clear
+echo "▶ Seeding settings..."
+php artisan db:seed --class=SettingSeeder --force || echo "SettingSeeder skipped"
 
-echo "Starting Laravel server..."
+echo "▶ Starting Laravel server..."
 php artisan serve --host=0.0.0.0 --port=${PORT:-10000}
