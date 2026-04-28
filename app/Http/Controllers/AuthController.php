@@ -180,6 +180,68 @@ class AuthController extends Controller
         ]);
     }
 
+    public function deleteUser(Request $request, $id)
+    {
+        $user = User::findOrFail($id);
+
+        // ── Step 1: Delete from Supabase (hard-fail if linked) ──────────────────
+        if ($user->supabase_id) {
+            $supabaseUrl = rtrim(env('SUPABASE_URL'), '/') 
+                        . '/auth/v1/admin/users/' 
+                        . $user->supabase_id;
+
+            \Log::info('Attempting Supabase user deletion', [
+                'supabase_id' => $user->supabase_id,
+                'url'         => $supabaseUrl,
+            ]);
+
+            try {
+                $supabaseResponse = Http::withHeaders([
+                    'apikey'        => env('SUPABASE_SERVICE_ROLE_KEY'),
+                    'Authorization' => 'Bearer ' . env('SUPABASE_SERVICE_ROLE_KEY'),
+                    'Content-Type'  => 'application/json',
+                ])->delete($supabaseUrl);
+
+                \Log::info('Supabase delete response', [
+                    'status' => $supabaseResponse->status(),
+                    'body'   => $supabaseResponse->body(),
+                ]);
+
+                // 404 = user doesn't exist in Supabase — treat as already deleted, continue
+                // Anything else that isn't 2xx = real failure, block the deletion
+                if (!$supabaseResponse->successful() && $supabaseResponse->status() !== 404) {
+                    return response()->json([
+                        'status'         => 'failed',
+                        'message'        => 'Failed to delete user from Supabase. Laravel record was NOT deleted.',
+                        'supabase_error' => $supabaseResponse->json(),
+                        'supabase_status'=> $supabaseResponse->status(),
+                    ], 500);
+                }
+
+            } catch (\Exception $e) {
+                \Log::error('Supabase delete exception', ['error' => $e->getMessage()]);
+
+                return response()->json([
+                    'status'  => 'failed',
+                    'message' => 'Supabase connection error: ' . $e->getMessage(),
+                ], 500);
+            }
+        }
+
+        // ── Step 2: Revoke all Sanctum tokens ───────────────────────────────────
+        $user->tokens()->delete();
+
+        // ── Step 3: Delete from Laravel ─────────────────────────────────────────
+        $user->delete();
+
+        \Log::info('User account permanently deleted', ['user_id' => $id]);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'User account has been permanently deleted.',
+        ]);
+    }
+
     public function supabaseLogin(Request $request)
     {
         $request->validate([
