@@ -100,7 +100,7 @@ class DashboardController extends Controller
 
         return response()->json([
             'data' => [
-                // ── Chart ───────────────────────────────────────────
+                // ── Charthhhhhhhhhhh ───────────────────────────────────────────
                 'barangay_clearances'   => $barangayClearance->getData(),
                 'business_clearances'   => $businessClearance->getData(),
                 'building_clearances'   => $buildingClearance->getData(),
