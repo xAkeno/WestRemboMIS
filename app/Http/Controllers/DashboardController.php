@@ -43,7 +43,7 @@ class DashboardController extends Controller
             return [
                 'id'      => $n->id,
                 'message' => $n->message,
-                'time'    => $n->created_at,
+                'time'    => $n->created_at,    
                 'type'    => $n->type,
             ];
         });
@@ -51,7 +51,7 @@ class DashboardController extends Controller
         // ── Latest Activities ─────────────────────────────────────────
         $user = Auth::user() ?? $request->user();
         $latestActivities = collect();
-
+        ///////////////////////////////////
         if ($user) {
             $latestActivities = ActivityLogger::query()
                 ->where('user_id', $user->id)
