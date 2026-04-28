@@ -1,14 +1,19 @@
 #!/bin/bash
 set -e
 
+echo "▶ Creating required directories..."
+mkdir -p /var/www/html/storage/framework/views
+mkdir -p /var/www/html/storage/framework/cache
+mkdir -p /var/www/html/storage/framework/sessions
+mkdir -p /var/www/html/storage/logs
+mkdir -p /var/www/html/bootstrap/cache
+chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+
 echo "▶ Caching config..."
 php artisan config:cache
 
 echo "▶ Caching routes..."
 php artisan route:cache
-
-echo "▶ Caching views..."
-php artisan view:cache
 
 echo "▶ Running migrations..."
 php artisan migrate --force --no-interaction
