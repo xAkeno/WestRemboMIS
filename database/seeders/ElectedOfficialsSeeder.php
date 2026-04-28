@@ -9,7 +9,7 @@ class ElectedOfficialsSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('officials')->insert([
+        DB::table('officials')->updateOrInsert([
             [
                 'profile_image' => 'profile_images/leo.jpg',
                 'full_name' => 'Kapitan LEO BES',

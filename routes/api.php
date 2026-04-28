@@ -234,15 +234,23 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
 
     // =========================================================================
 
-    Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
-    Route::get('/backup', [BackupController::class, 'listBackups']);
-    Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
-    Route::get('/backup/settings', [BackupController::class, 'getSettings']);
-    Route::post('/backup/settings', [BackupController::class, 'saveSettings']);
-    Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
-    Route::post('/backup/restore-upload', [BackupController::class, 'restoreUpload']);
-    Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
+    // Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
+    // Route::get('/backup', [BackupController::class, 'listBackups']);
+    // Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
+    // Route::get('/backup/settings', [BackupController::class, 'getSettings']);
+    // Route::post('/backup/settings', [BackupController::class, 'saveSettings']);
+    // Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
+    // Route::post('/backup/restore-upload', [BackupController::class, 'restoreUpload']);
+    // Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
 
+    Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
+
+    Route::get('/backup', [BackupController::class, 'listBackups']);
+
+    Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
+
+    Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
+    
     // ─── DocumentController (admin: templates / layouts) ─────────────────────
     Route::get('/documents/admin',        [DocumentController::class, 'index']);
     Route::post('/documents/admin',       [DocumentController::class, 'store']);
