@@ -26,8 +26,8 @@ class DocumentUpload extends Model
         'is_required' => 'boolean',
         'file_size'   => 'integer',
     ];
-
-    // ── Slot definitions (mirrors the React frontend exactly) ──────────────────
+ 
+    // ── Slot definitions (mirrors the Redsdsdsdsdsdsdsactfrontend eeexactly) ──────────────────
     public const SLOTS = [
         'personal_id' => [
             'valid_id_front'      => ['label' => 'Valid Government ID (Front)', 'required' => true],
