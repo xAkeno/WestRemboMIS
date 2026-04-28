@@ -8,9 +8,7 @@ use Illuminate\Support\Facades\Storage;
 class BackupController extends Controller
 {
     /**
-     * ─────────────────────────────────────────────
      * CREATE BACKUP (POSTGRES + OPTIONAL ENCRYPTION)
-     * ─────────────────────────────────────────────
      */
     public function runDatabaseBackup()
     {
@@ -20,19 +18,16 @@ class BackupController extends Controller
         $user   = env('DB_USERNAME');
         $pass   = env('DB_PASSWORD');
 
-        $date = now()->format('Y-m-d_H-i-s');
+        $date     = now()->format('Y-m-d_H-i-s');
         $fileName = "backup_{$dbName}_{$date}.sql";
         $tempPath = storage_path("app/backups/{$fileName}");
 
-        // Ensure folder exists
         if (!file_exists(storage_path('app/backups'))) {
             mkdir(storage_path('app/backups'), 0777, true);
         }
 
-        // Set password for pg_dump
         putenv("PGPASSWORD={$pass}");
 
-        // PostgreSQL dump command
         $command = "pg_dump -h {$host} -p {$port} -U {$user} -F p {$dbName} > \"{$tempPath}\"";
         exec($command, $output, $result);
 
@@ -43,35 +38,21 @@ class BackupController extends Controller
             ], 500);
         }
 
-        // ───────────────────────────────
-        // OPTIONAL ENCRYPTION (toggle here)
-        // ───────────────────────────────
         $encrypt = true;
 
         if ($encrypt) {
             $key = env('BACKUP_ENCRYPTION_KEY');
-
             $sql = file_get_contents($tempPath);
 
             $encrypted = base64_encode(
-                openssl_encrypt(
-                    $sql,
-                    'AES-256-CBC',
-                    $key,
-                    0,
-                    substr($key, 0, 16)
-                )
+                openssl_encrypt($sql, 'AES-256-CBC', $key, 0, substr($key, 0, 16))
             );
 
             $fileName = "backup_{$dbName}_{$date}.sql.enc";
             $tempPath = storage_path("app/backups/{$fileName}");
-
             file_put_contents($tempPath, $encrypted);
         }
 
-        // ───────────────────────────────
-        // UPLOAD TO S3
-        // ───────────────────────────────
         $s3Path = Storage::disk('s3')->putFileAs(
             'backups',
             new \Illuminate\Http\File($tempPath),
@@ -86,9 +67,7 @@ class BackupController extends Controller
     }
 
     /**
-     * ─────────────────────────────────────────────
      * DOWNLOAD BACKUP (OPTIONAL DECRYPT)
-     * ─────────────────────────────────────────────
      */
     public function downloadBackup($fileName)
     {
@@ -102,13 +81,10 @@ class BackupController extends Controller
         }
 
         $isEncrypted = str_ends_with($fileName, '.enc');
+        $content     = file_get_contents($path);
 
-        $content = file_get_contents($path);
-
-        // Decrypt if needed
         if ($isEncrypted) {
-            $key = env('BACKUP_ENCRYPTION_KEY');
-
+            $key     = env('BACKUP_ENCRYPTION_KEY');
             $content = openssl_decrypt(
                 base64_decode($content),
                 'AES-256-CBC',
@@ -126,15 +102,13 @@ class BackupController extends Controller
         }
 
         return response($content, 200, [
-            'Content-Type' => 'application/sql',
-            'Content-Disposition' => "attachment; filename={$fileName}.sql"
+            'Content-Type'        => 'application/sql',
+            'Content-Disposition' => "attachment; filename={$fileName}.sql",
         ]);
     }
 
     /**
-     * ─────────────────────────────────────────────
-     * RESTORE BACKUP (AUTO DETECT ENCRYPTED OR NOT)
-     * ─────────────────────────────────────────────
+     * RESTORE BACKUP FROM EXISTING FILE ON DISK (AUTO DETECT ENCRYPTED OR NOT)
      */
     public function restoreFromFile($fileName)
     {
@@ -155,13 +129,8 @@ class BackupController extends Controller
 
         $sqlToRun = $filePath;
 
-        // ───────────────────────────────
-        // IF ENCRYPTED → DECRYPT FIRST
-        // ───────────────────────────────
         if (str_ends_with($fileName, '.enc')) {
-
-            $key = env('BACKUP_ENCRYPTION_KEY');
-
+            $key       = env('BACKUP_ENCRYPTION_KEY');
             $encrypted = file_get_contents($filePath);
 
             $decrypted = openssl_decrypt(
@@ -183,14 +152,15 @@ class BackupController extends Controller
             file_put_contents($sqlToRun, $decrypted);
         }
 
-        // ───────────────────────────────
-        // POSTGRES RESTORE COMMAND
-        // ───────────────────────────────
         putenv("PGPASSWORD={$pass}");
 
         $command = "psql -h {$host} -p {$port} -U {$user} -d {$dbName} < \"{$sqlToRun}\"";
-
         exec($command, $output, $result);
+
+        // Clean up temp file if it was created
+        if (str_ends_with($fileName, '.enc') && file_exists(storage_path("app/backups/temp_restore.sql"))) {
+            unlink(storage_path("app/backups/temp_restore.sql"));
+        }
 
         return response()->json([
             'success' => $result === 0,
@@ -200,9 +170,51 @@ class BackupController extends Controller
     }
 
     /**
-     * ─────────────────────────────────────────────
-     * LIST BACKUPS (LOCAL OR S3 READY)
-     * ─────────────────────────────────────────────
+     * RESTORE FROM UPLOADED SQL FILE
+     * Route: POST /api/backup/restore-upload
+     */
+    public function restoreFromUpload(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:sql,txt|max:102400', // max 100MB
+        ]);
+
+        $dbName = env('DB_DATABASE');
+        $host   = env('DB_HOST');
+        $port   = env('DB_PORT', 5432);
+        $user   = env('DB_USERNAME');
+        $pass   = env('DB_PASSWORD');
+
+        // Save the uploaded file to a temp path
+        $uploadedFile = $request->file('file');
+        $tempPath     = storage_path('app/backups/upload_restore_' . now()->format('Y-m-d_H-i-s') . '.sql');
+
+        if (!file_exists(storage_path('app/backups'))) {
+            mkdir(storage_path('app/backups'), 0777, true);
+        }
+
+        // Move uploaded file to temp storage
+        $uploadedFile->move(storage_path('app/backups'), basename($tempPath));
+
+        putenv("PGPASSWORD={$pass}");
+
+        $command = "psql -h {$host} -p {$port} -U {$user} -d {$dbName} < \"{$tempPath}\"";
+        exec($command, $output, $result);
+
+        // Clean up the uploaded temp file
+        if (file_exists($tempPath)) {
+            unlink($tempPath);
+        }
+
+        return response()->json([
+            'success' => $result === 0,
+            'message' => $result === 0 ? 'Restore successful' : 'Restore failed',
+            'debug'   => $output,
+        ]);
+    }
+
+    /**
+     * LIST BACKUPS FROM S3
      */
     public function listBackups()
     {
@@ -210,9 +222,11 @@ class BackupController extends Controller
 
         $backups = collect($files)->map(function ($file) {
             return [
-                'name' => basename($file),
-                'path' => $file,
-                'url'  => Storage::disk('s3')->url($file),
+                'name'         => basename($file),
+                'path'         => $file,
+                'url'          => Storage::disk('s3')->url($file),
+                'size_kb'      => round(Storage::disk('s3')->size($file) / 1024, 2),
+                'last_modified'=> date('Y-m-d H:i:s', Storage::disk('s3')->lastModified($file)),
             ];
         });
 
