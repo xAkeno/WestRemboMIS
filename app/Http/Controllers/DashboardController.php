@@ -51,7 +51,7 @@ class DashboardController extends Controller
         // ── Latest Activities ─────────────────────────────────────────
         $user = Auth::user() ?? $request->user();
         $latestActivities = collect();
-
+        ///////////////////////////////////
         if ($user) {
             $latestActivities = ActivityLogger::query()
                 ->where('user_id', $user->id)
