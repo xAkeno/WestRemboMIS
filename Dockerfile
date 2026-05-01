@@ -19,7 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgmp-dev \
     libxml2-dev \
     ca-certificates \
-    postgresql-client-15 \
     && rm -rf /var/lib/apt/lists/*
 
 # =========================
