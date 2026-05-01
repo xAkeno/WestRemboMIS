@@ -5,15 +5,22 @@ WORKDIR /var/www/html
 # =========================
 # System dependencies
 # =========================
-RUN apt-get update && apt-get install -y \
-    git unzip zip curl ghostscript \
-    libpq-dev libzip-dev \
-    libpng-dev libjpeg-dev libfreetype6-dev \
-    libgmp-dev libonig-dev libxml2-dev \
-    ca-certificates postgresql-client \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install \
-        pdo pdo_pgsql zip mbstring xml bcmath gd gmp tokenizer ctype
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    unzip \
+    zip \
+    curl \
+    ghostscript \
+    libpq-dev \
+    libzip-dev \
+    libpng-dev \
+    libjpeg62-turbo-dev \
+    libfreetype6-dev \
+    libgmp-dev \
+    libxml2-dev \
+    ca-certificates \
+    postgresql-client-15 \
+    && rm -rf /var/lib/apt/lists/*
 
 # =========================
 # Composer
