@@ -3,797 +3,255 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
-use PDO;
-use PDOException;
-
+use Illuminate\Support\Facades\File;
+use App\Models\BackupSetting;
 class BackupController extends Controller
 {
-    /**
-     * CREATE ENCRYPTED BACKUP using pg_dump
-     */
+    protected $backupPath;
+
+    public function __construct()
+    {
+        $this->backupPath = storage_path('app/backups/');
+
+        if (!file_exists($this->backupPath)) {
+            mkdir($this->backupPath, 0777, true);
+        }
+    }
+
+    /* =========================
+       DATABASE BACKUP (FIXED)
+    ========================= */
     public function runDatabaseBackup()
     {
-        try {
-            $dbName = env('DB_DATABASE');
-            $host   = env('DB_HOST');
-            $port   = env('DB_PORT', 5432);
-            $user   = env('DB_USERNAME');
-            $pass   = env('DB_PASSWORD');
+        $backupDir = storage_path('app/backups/');
 
-            $date     = now()->format('Y-m-d_H-i-s');
-            $fileName = "backup_{$dbName}_{$date}.sql";
-            $tempPath = storage_path("app/backups/{$fileName}");
-            $encryptedPath = storage_path("app/backups/encrypted_{$fileName}.enc");
+        if (!file_exists($backupDir)) {
+            mkdir($backupDir, 0777, true);
+        }
 
-            if (!file_exists(storage_path('app/backups'))) {
-                mkdir(storage_path('app/backups'), 0777, true);
-            }
-
-            // Execute pg_dump
-            $command = "PGPASSWORD='{$pass}' pg_dump -h {$host} -p {$port} -U {$user} --no-owner --no-privileges -F p {$dbName} 2>&1";
-            
-            exec($command, $output, $returnCode);
-            $sql = implode("\n", $output);
-            
-            if ($returnCode !== 0 || empty($sql)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Backup failed: ' . $sql,
-                    'return_code' => $returnCode
-                ], 500);
-            }
-
-            // Save unencrypted backup locally
-            file_put_contents($tempPath, $sql);
-            
-            // Encrypt the file
-            $this->encryptFile($tempPath, $encryptedPath);
-            
-            // Upload encrypted file to S3
-            $s3Path = Storage::disk('s3')->putFileAs(
-                'encrypted_backups',
-                new \Illuminate\Http\File($encryptedPath),
-                "encrypted_{$fileName}.enc"
-            );
-
-            // Clean up temp files
-            unlink($tempPath);
-            
-            // Keep encrypted local copy
-            $encryptedSize = filesize($encryptedPath);
-            
-            return response()->json([
-                'success' => true,
-                'file'    => "encrypted_{$fileName}.enc",
-                'path'    => $s3Path,
-                'original_size_kb' => round(strlen($sql) / 1024, 2),
-                'encrypted_size_kb' => round($encryptedSize / 1024, 2),
-                'encrypted' => true
-            ]);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Backup failed: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * RESTORE FROM ENCRYPTED FILE
-     */
-    public function restoreFromFile($fileName)
-    {
-        try {
-            $fileName = basename($fileName);
-            
-            // Determine if it's encrypted or not
-            $isEncrypted = strpos($fileName, '.enc') !== false;
-            $sqlFileName = str_replace('.enc', '', $fileName);
-            $sqlFileName = str_replace('encrypted_', '', $sqlFileName);
-            
-            $localEncryptedPath = storage_path("app/backups/{$fileName}");
-            $localDecryptedPath = storage_path("app/backups/decrypted_{$sqlFileName}");
-            
-            // Check local storage first
-            if (!file_exists($localEncryptedPath)) {
-                // Try S3
-                $s3Path = $isEncrypted ? "encrypted_backups/{$fileName}" : "backups/{$fileName}";
-                
-                if (Storage::disk('s3')->exists($s3Path)) {
-                    $content = Storage::disk('s3')->get($s3Path);
-                    file_put_contents($localEncryptedPath, $content);
-                } else {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Backup file not found: {$fileName}"
-                    ], 404);
-                }
-            }
-            
-            // Decrypt if needed
-            if ($isEncrypted) {
-                $this->decryptFile($localEncryptedPath, $localDecryptedPath);
-                $sql = file_get_contents($localDecryptedPath);
-                unlink($localDecryptedPath); // Clean up
-            } else {
-                $sql = file_get_contents($localEncryptedPath);
-            }
-            
-            if (empty($sql)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Backup file is empty'
-                ], 500);
-            }
-            
-            // Execute restore
-            return $this->executeRestore($sql);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Restore failed: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * RESTORE FROM UPLOAD (supports both encrypted and plain SQL)
-     */
-    public function restoreFromUpload(Request $request)
-    {
-        try {
-            $request->validate([
-                'file' => 'required|file|max:512000', // Max 500MB
-                'encrypted' => 'boolean'
-            ]);
-
-            $uploaded = $request->file('file');
-            $uploadedPath = $uploaded->getRealPath();
-            $isEncrypted = $request->input('encrypted', false);
-            
-            if ($isEncrypted) {
-                $tempDecryptedPath = storage_path('app/backups/temp_decrypted_' . time() . '.sql');
-                $this->decryptFile($uploadedPath, $tempDecryptedPath);
-                $sql = file_get_contents($tempDecryptedPath);
-                unlink($tempDecryptedPath);
-            } else {
-                $sql = file_get_contents($uploadedPath);
-            }
-            
-            if (empty($sql)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Uploaded file is empty'
-                ], 500);
-            }
-            
-            return $this->executeRestore($sql);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Upload restore failed: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * ENCRYPT FILE using OpenSSL with proper key derivation
-     */
-    private function encryptFile(string $sourcePath, string $destPath): void
-    {
-        $key = $this->getEncryptionKey();
-        $iv = random_bytes(16);
-        
-        $content = file_get_contents($sourcePath);
-        $encrypted = openssl_encrypt($content, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
-        
-        if ($encrypted === false) {
-            throw new \Exception('Encryption failed');
-        }
-        
-        // Store version info to handle different key formats in the future
-        $version = 1; // Version 1: AES-256-CBC with SHA-256 key derivation
-        
-        // Format: [version:1 byte][iv:16 bytes][encrypted data]
-        $data = pack('C', $version) . $iv . $encrypted;
-        file_put_contents($destPath, $data);
-    }
-
-    /**
-     * DECRYPT FILE using OpenSSL
-     */
-    private function decryptFile(string $sourcePath, string $destPath): void
-    {
-        $key = $this->getEncryptionKey();
-        $data = file_get_contents($sourcePath);
-        
-        if (empty($data)) {
-            throw new \Exception('Encrypted file is empty');
-        }
-        
-        // Extract version (first byte)
-        $version = unpack('C', $data[0])[1];
-        $data = substr($data, 1);
-        
-        if ($version !== 1) {
-            throw new \Exception("Unsupported encryption version: {$version}");
-        }
-        
-        // Extract IV (next 16 bytes)
-        $iv = substr($data, 0, 16);
-        $encrypted = substr($data, 16);
-        
-        $decrypted = openssl_decrypt($encrypted, 'AES-256-CBC', $key, OPENSSL_RAW_DATA, $iv);
-        
-        if ($decrypted === false) {
-            throw new \Exception('Decryption failed - invalid key or corrupted file');
-        }
-        
-        file_put_contents($destPath, $decrypted);
-    }
-
-    /**
-     * Get encryption key from environment and convert to proper format
-     * Supports any string key (will be converted to 32 bytes using SHA-256)
-     */
-    private function getEncryptionKey(): string
-    {
-        $key = env('BACKUP_ENCRYPTION_KEY');
-        
-        if (!$key) {
-            if (app()->environment('local')) {
-                // Generate random key for local development
-                $key = random_bytes(32);
-                \Log::warning('No BACKUP_ENCRYPTION_KEY set in .env, using random key for this session');
-            } else {
-                throw new \Exception('BACKUP_ENCRYPTION_KEY is not set in production environment');
-            }
-        }
-        
-        // Convert any string to a proper 32-byte key using SHA-256
-        // This ensures your key "barangaywestremboadmin528312026!" works
-        if (is_string($key) && strlen($key) !== 32) {
-            $key = substr(hash('sha256', $key, true), 0, 32);
-        }
-        
-        // If it's base64 encoded, decode it
-        if (is_string($key) && preg_match('/^[A-Za-z0-9+\/=]+$/', $key)) {
-            $decoded = base64_decode($key, true);
-            if ($decoded !== false && strlen($decoded) === 32) {
-                $key = $decoded;
-            }
-        }
-        
-        // Final validation
-        if (strlen($key) !== 32) {
-            throw new \Exception('BACKUP_ENCRYPTION_KEY must result in 32 bytes after processing');
-        }
-        
-        return $key;
-    }
-
-    /**
-     * CORE RESTORE LOGIC
-     */
-    private function executeRestore(string $sql): \Illuminate\Http\JsonResponse
-    {
-        $pdo = null;
-        
-        try {
-            // Get PDO connection
-            $pdo = $this->getPdo();
-            
-            // Start transaction
-            $pdo->beginTransaction();
-            
-            // Drop all existing tables to avoid conflicts
-            $this->dropAllTables($pdo);
-            
-            // Split SQL into statements
-            $statements = $this->splitSqlStatements($sql);
-            
-            if (empty($statements)) {
-                throw new \Exception('No SQL statements found in backup');
-            }
-            
-            $executed = 0;
-            $failed = 0;
-            $errors = [];
-            
-            foreach ($statements as $index => $statement) {
-                $stmt = trim($statement);
-                if (empty($stmt) || $stmt === ';') {
-                    continue;
-                }
-                
-                try {
-                    $pdo->exec($stmt);
-                    $executed++;
-                    
-                    // Log progress every 100 statements
-                    if ($executed % 100 === 0) {
-                        \Log::info("Restore progress: {$executed} statements executed");
-                    }
-                    
-                } catch (PDOException $e) {
-                    $failed++;
-                    $errorMsg = $e->getMessage();
-                    
-                    // Skip certain harmless errors
-                    if ($this->isHarmlessError($errorMsg)) {
-                        $executed++; // Count as success
-                        continue;
-                    }
-                    
-                    $errors[] = [
-                        'statement' => substr($stmt, 0, 100) . '...',
-                        'error' => $errorMsg
-                    ];
-                    
-                    // Stop on critical errors
-                    if ($this->isCriticalError($errorMsg)) {
-                        throw new \Exception("Critical error at statement {$index}: {$errorMsg}");
-                    }
-                }
-            }
-            
-            // Commit if we executed anything
-            if ($executed > 0) {
-                $pdo->commit();
-                
-                \Log::info("Restore completed", [
-                    'executed' => $executed,
-                    'failed' => $failed,
-                    'errors' => count($errors)
-                ]);
-                
-                return response()->json([
-                    'success' => true,
-                    'message' => "Restore successful! Executed {$executed} statements",
-                    'failed_statements' => $failed,
-                    'warnings' => $errors
-                ]);
-            } else {
-                $pdo->rollBack();
-                return response()->json([
-                    'success' => false,
-                    'message' => 'No statements were executed successfully',
-                    'errors' => $errors
-                ], 500);
-            }
-            
-        } catch (\Exception $e) {
-            if ($pdo && $pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
-            
-            \Log::error("Restore failed", [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Restore failed: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Drop all tables before restore
-     */
-    private function dropAllTables(PDO $pdo)
-    {
-        try {
-            // Get all tables
-            $stmt = $pdo->query("
-                SELECT tablename 
-                FROM pg_tables 
-                WHERE schemaname = 'public'
-            ");
-            
-            $tables = $stmt->fetchAll(PDO::FETCH_COLUMN);
-            
-            if (empty($tables)) {
-                return;
-            }
-            
-            // Disable constraints temporarily
-            $pdo->exec('SET session_replication_role = replica;');
-            
-            // Drop tables in reverse order to handle dependencies
-            foreach ($tables as $table) {
-                try {
-                    $pdo->exec("DROP TABLE IF EXISTS \"{$table}\" CASCADE");
-                    \Log::info("Dropped table: {$table}");
-                } catch (PDOException $e) {
-                    \Log::warning("Could not drop table {$table}: " . $e->getMessage());
-                }
-            }
-            
-            // Drop any remaining sequences
-            $stmt = $pdo->query("
-                SELECT sequence_name 
-                FROM information_schema.sequences 
-                WHERE sequence_schema = 'public'
-            ");
-            $sequences = $stmt->fetchAll(PDO::FETCH_COLUMN);
-            foreach ($sequences as $sequence) {
-                try {
-                    $pdo->exec("DROP SEQUENCE IF EXISTS \"{$sequence}\" CASCADE");
-                } catch (PDOException $e) {
-                    // Ignore errors
-                }
-            }
-            
-            // Re-enable constraints
-            $pdo->exec('SET session_replication_role = DEFAULT;');
-            
-        } catch (\Exception $e) {
-            \Log::warning("Error dropping tables: " . $e->getMessage());
-            // Continue anyway
-        }
-    }
-
-    /**
-     * Check if error is harmless and can be skipped
-     */
-    private function isHarmlessError(string $error): bool
-    {
-        $harmlessPatterns = [
-            'already exists',
-            'duplicate key value violates unique constraint',
-            'relation.*already exists',
-            'constraint.*already exists',
-            'type.*already exists',
-            'function.*already exists',
-            'schema.*already exists',
-            'extension.*already exists',
-        ];
-        
-        foreach ($harmlessPatterns as $pattern) {
-            if (preg_match("/{$pattern}/i", $error)) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * Check if error is critical and should stop restore
-     */
-    private function isCriticalError(string $error): bool
-    {
-        $criticalPatterns = [
-            'permission denied',
-            'cannot drop',
-            'disk full',
-            'out of memory',
-            'connection',
-        ];
-        
-        foreach ($criticalPatterns as $pattern) {
-            if (preg_match("/{$pattern}/i", $error)) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    /**
-     * Better SQL statement splitter that handles PostgreSQL syntax
-     */
-    private function splitSqlStatements(string $sql): array
-    {
-        // Remove comments
-        $sql = preg_replace('/^\-\-.*$/m', '', $sql);
-        $sql = preg_replace('/\/\*.*?\*\//s', '', $sql);
-        
-        $statements = [];
-        $current = '';
-        $inString = false;
-        $stringChar = '';
-        $inDollar = false;
-        $dollarTag = '';
-        
-        $length = strlen($sql);
-        
-        for ($i = 0; $i < $length; $i++) {
-            $char = $sql[$i];
-            
-            // Handle dollar quotes (PostgreSQL feature)
-            if (!$inString && $char === '$' && !$inDollar) {
-                // Find dollar tag
-                $j = $i + 1;
-                while ($j < $length && $sql[$j] !== '$') {
-                    $j++;
-                }
-                if ($j < $length && $sql[$j] === '$') {
-                    $dollarTag = substr($sql, $i, $j - $i + 1);
-                    $inDollar = true;
-                    $current .= $char;
-                    continue;
-                }
-            }
-            
-            if ($inDollar && strpos(substr($sql, $i), $dollarTag) === 0) {
-                $inDollar = false;
-                $current .= $dollarTag;
-                $i += strlen($dollarTag) - 1;
-                continue;
-            }
-            
-            // Handle regular strings
-            if (!$inDollar && ($char === "'" || $char === '"')) {
-                if (!$inString) {
-                    $inString = true;
-                    $stringChar = $char;
-                } elseif ($stringChar === $char) {
-                    // Check for escaped quote
-                    if ($i > 0 && $sql[$i - 1] === '\\') {
-                        $current .= $char;
-                        continue;
-                    }
-                    $inString = false;
-                }
-            }
-            
-            $current .= $char;
-            
-            // Split on semicolon when not in string or dollar quote
-            if (!$inString && !$inDollar && $char === ';') {
-                $stmt = trim($current);
-                if (!empty($stmt) && $stmt !== ';') {
-                    $statements[] = $stmt;
-                }
-                $current = '';
-            }
-        }
-        
-        // Add remaining
-        $current = trim($current);
-        if (!empty($current)) {
-            $statements[] = $current;
-        }
-        
-        return $statements;
-    }
-
-    /**
-     * Get PDO connection with proper settings for PostgreSQL
-     */
-    private function getPdo(): PDO
-    {
-        $host   = env('DB_HOST');
-        $port   = env('DB_PORT', 5432);
         $dbName = env('DB_DATABASE');
-        $user   = env('DB_USERNAME');
-        $pass   = env('DB_PASSWORD');
-        
-        $pdo = new PDO(
-            "pgsql:host={$host};port={$port};dbname={$dbName}",
-            $user,
-            $pass,
+        $date = now()->format('Y-m-d_H-i-s');
+
+        $fileName = "backup_{$dbName}_{$date}.sql";
+        $filePath = $backupDir . $fileName;
+
+        $host = env('DB_HOST');
+        $port = env('DB_PORT', 3306);
+        $user = env('DB_USERNAME');
+        $pass = env('DB_PASSWORD');
+
+        $command = "mysqldump -h {$host} -P {$port} -u {$user} --password={$pass} {$dbName} > \"{$filePath}\"";
+
+        exec($command, $output, $result);
+
+        if ($result !== 0 || !file_exists($filePath) || filesize($filePath) < 100) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Backup failed'
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'file' => $fileName
+        ]);
+    }
+
+    public function getSettings()
+    {
+        // Always return a single row — create it with defaults if it doesn't exist yet
+        $setting = BackupSetting::firstOrCreate(
+            [],
             [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_TIMEOUT => 300, // 5 minute timeout for large restores
-                PDO::ATTR_EMULATE_PREPARES => false,
+                'frequency' => 'daily',
+                'time'      => '02:00',
+                'enabled'   => true,
             ]
         );
-        
-        // Set schema and other important settings
-        $pdo->exec("SET search_path TO public");
-        $pdo->exec("SET statement_timeout = '300s'");
-        $pdo->exec("SET lock_timeout = '60s'");
-        
-        return $pdo;
+ 
+        return response()->json([
+            'success'  => true,
+            'settings' => [
+                'id'          => $setting->id,
+                'enabled'     => $setting->enabled,
+                'frequency'   => $setting->frequency,
+                'time'        => $setting->time,
+                'day_of_week' => $setting->day_of_week ?? null,
+                'updated_at'  => $setting->updated_at,
+            ],
+        ]);
+    }
+    public function saveSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'enabled'     => 'required|boolean',
+            'frequency'   => 'required|in:hourly,daily,weekly',
+            'time'        => 'nullable|date_format:H:i',
+            'day_of_week' => 'nullable|integer|min:0|max:6',
+        ]);
+ 
+        // time is required when frequency is daily or weekly
+        if (in_array($validated['frequency'], ['daily', 'weekly']) && empty($validated['time'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Time is required for daily and weekly schedules.',
+            ], 422);
+        }
+ 
+        // day_of_week is required when frequency is weekly
+        if ($validated['frequency'] === 'weekly' && is_null($validated['day_of_week'] ?? null)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Day of week is required for weekly schedules.',
+            ], 422);
+        }
+ 
+        $setting = BackupSetting::first();
+ 
+        if ($setting) {
+            $setting->update($validated);
+        } else {
+            $setting = BackupSetting::create($validated);
+        }
+ 
+        return response()->json([
+            'success'  => true,
+            'message'  => 'Backup schedule saved successfully.',
+            'settings' => [
+                'id'          => $setting->id,
+                'enabled'     => $setting->enabled,
+                'frequency'   => $setting->frequency,
+                'time'        => $setting->time,
+                'day_of_week' => $setting->day_of_week ?? null,
+                'updated_at'  => $setting->updated_at,
+            ],
+        ]);
+    }
+    public function restoreUpload(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|extensions:sql',
+        ]);
+
+        $file = $request->file('file');
+
+        $filePath = $file->storeAs(
+            'backups/temp',
+            $file->getClientOriginalName()
+        );
+
+        $fullPath = storage_path('app/' . $filePath);
+
+        $host = env('DB_HOST', '127.0.0.1');
+        $port = env('DB_PORT', 3306);
+        $user = env('DB_USERNAME');
+        $pass = env('DB_PASSWORD');
+        $db   = env('DB_DATABASE');
+
+        // ⚠️ IMPORTANT: safe restore command
+        $command = "mysql -h {$host} -P {$port} -u {$user} --password={$pass} {$db} < \"{$fullPath}\"";
+
+        exec($command, $output, $result);
+
+        if ($result !== 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Restore failed',
+                'debug' => $output
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Database restored successfully',
+        ]);
     }
 
-    /**
-     * LIST BACKUPS (both local and S3)
-     */
+    /* =========================
+       LIST BACKUPS (SORTED NEWEST FIRST)
+    ========================= */
     public function listBackups()
     {
-        try {
-            $backups = [];
-            $backupDir = storage_path('app/backups');
-            
-            // Local backups
-            if (file_exists($backupDir)) {
-                $encryptedFiles = glob($backupDir . '/*.enc');
-                foreach ($encryptedFiles as $file) {
-                    $backups[] = [
-                        'name' => basename($file),
-                        'location' => 'local',
-                        'size_kb' => round(filesize($file) / 1024, 2),
-                        'size_mb' => round(filesize($file) / 1024 / 1024, 2),
-                        'encrypted' => true,
-                        'last_modified' => date('Y-m-d H:i:s', filemtime($file))
-                    ];
-                }
-            }
-            
-            // S3 encrypted backups
-            if (Storage::disk('s3')->exists('encrypted_backups')) {
-                $files = Storage::disk('s3')->files('encrypted_backups');
-                foreach ($files as $file) {
-                    if (strpos($file, '.enc') !== false) {
-                        $backups[] = [
-                            'name' => basename($file),
-                            'location' => 's3',
-                            'size_kb' => round(Storage::disk('s3')->size($file) / 1024, 2),
-                            'size_mb' => round(Storage::disk('s3')->size($file) / 1024 / 1024, 2),
-                            'encrypted' => true,
-                            'last_modified' => date('Y-m-d H:i:s', Storage::disk('s3')->lastModified($file))
-                        ];
-                    }
-                }
-            }
-            
-            // Sort by last modified (newest first)
-            usort($backups, function($a, $b) {
-                return strtotime($b['last_modified']) - strtotime($a['last_modified']);
-            });
-            
-            return response()->json([
-                'success' => true,
-                'count' => count($backups),
-                'backups' => $backups
-            ]);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to list backups: ' . $e->getMessage()
-            ], 500);
+        $path = $this->backupPath;
+
+        if (!file_exists($path)) {
+            return response()->json(['success' => true, 'backups' => []]);
         }
+
+        $files = collect(File::files($path))
+            ->sortByDesc(fn($file) => $file->getMTime());
+
+        $backups = [];
+
+        $latest = file_exists($path . "LATEST_BACKUP.txt")
+            ? trim(file_get_contents($path . "LATEST_BACKUP.txt"))
+            : null;
+
+        foreach ($files as $file) {
+            $name = $file->getFilename();
+
+            // skip system file
+            if ($name === "LATEST_BACKUP.txt") continue;
+
+            $backups[] = [
+                'name' => $name,
+                'size_kb' => round($file->getSize() / 1024, 2),
+                'last_modified' => date('Y-m-d H:i:s', $file->getMTime()),
+                'download_url' => url('/api/backup/' . $name . '/download'),
+                'is_latest' => $name === $latest,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'latest' => $latest,
+            'backups' => $backups,
+        ]);
     }
 
-    /**
-     * DELETE BACKUP
-     */
-    public function deleteBackup($fileName)
+    /* =========================
+       DOWNLOAD BACKUP
+    ========================= */
+    public function downloadBackup($fileName)
     {
-        try {
-            $fileName = basename($fileName);
-            $deleted = false;
-            
-            // Delete from local
-            $localPath = storage_path("app/backups/{$fileName}");
-            if (file_exists($localPath)) {
-                unlink($localPath);
-                $deleted = true;
-            }
-            
-            // Delete from S3
-            $s3Path = "encrypted_backups/{$fileName}";
-            if (Storage::disk('s3')->exists($s3Path)) {
-                Storage::disk('s3')->delete($s3Path);
-                $deleted = true;
-            }
-            
-            if (!$deleted) {
-                return response()->json([
-                    'success' => false,
-                    'message' => "Backup file not found: {$fileName}"
-                ], 404);
-            }
-            
-            return response()->json([
-                'success' => true,
-                'message' => "Backup deleted successfully: {$fileName}"
-            ]);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Delete failed: ' . $e->getMessage()
-            ], 500);
+        $filePath = $this->backupPath . $fileName;
+
+        if (!file_exists($filePath)) {
+            return response()->json(['message' => 'File not found'], 404);
         }
+
+        return response()->download($filePath, $fileName, [
+            'Content-Type' => 'application/sql',
+        ]);
     }
 
-    /**
-     * DEBUG METHOD - Check database structure
-     */
-    public function debugDatabase()
+    /* =========================
+       RESTORE BACKUP
+    ========================= */
+    public function restoreFromFile($fileName)
     {
-        try {
-            $pdo = $this->getPdo();
-            
-            // Get table list
-            $tables = $pdo->query("
-                SELECT 
-                    tablename, 
-                    (SELECT count(*) FROM information_schema.columns WHERE table_name = tablename) as column_count
-                FROM pg_tables 
-                WHERE schemaname = 'public'
-                ORDER BY tablename
-            ")->fetchAll(PDO::FETCH_ASSOC);
-            
-            // Get row counts
-            foreach ($tables as &$table) {
-                try {
-                    $count = $pdo->query("SELECT COUNT(*) FROM \"{$table['tablename']}\"")->fetchColumn();
-                    $table['row_count'] = (int)$count;
-                } catch (\Exception $e) {
-                    $table['row_count'] = 'Error: ' . $e->getMessage();
-                }
-            }
-            
-            // Get database size
-            $dbSize = $pdo->query("
-                SELECT pg_size_pretty(pg_database_size(current_database())) as size
-            ")->fetchColumn();
-            
-            return response()->json([
-                'success' => true,
-                'database' => env('DB_DATABASE'),
-                'host' => env('DB_HOST'),
-                'port' => env('DB_PORT', 5432),
-                'database_size' => $dbSize,
-                'total_tables' => count($tables),
-                'tables' => $tables
-            ]);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ], 500);
-        }
-    }
+        $filePath = $this->backupPath . $fileName;
 
-    /**
-     * TEST ENCRYPTION/DECRYPTION
-     */
-    public function testEncryption()
-    {
-        try {
-            $testString = "This is a test string for encryption at " . now();
-            $tempFile = storage_path('app/backups/test_' . time() . '.txt');
-            $encryptedFile = storage_path('app/backups/test_encrypted_' . time() . '.enc');
-            $decryptedFile = storage_path('app/backups/test_decrypted_' . time() . '.txt');
-            
-            // Write test content
-            file_put_contents($tempFile, $testString);
-            
-            // Encrypt
-            $this->encryptFile($tempFile, $encryptedFile);
-            
-            // Decrypt
-            $this->decryptFile($encryptedFile, $decryptedFile);
-            
-            // Read decrypted content
-            $decryptedString = file_get_contents($decryptedFile);
-            
-            // Clean up
-            unlink($tempFile);
-            unlink($encryptedFile);
-            unlink($decryptedFile);
-            
-            $success = ($testString === $decryptedString);
-            
-            return response()->json([
-                'success' => $success,
-                'message' => $success ? 'Encryption test passed!' : 'Encryption test failed - strings do not match',
-                'original' => $testString,
-                'decrypted' => $decryptedString,
-                'encryption_key_configured' => !empty(env('BACKUP_ENCRYPTION_KEY')),
-                'key_used' => $this->getEncryptionKey() ? 'Valid 32-byte key' : 'Invalid key'
-            ]);
-            
-        } catch (\Exception $e) {
+        if (!file_exists($filePath)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Encryption test failed: ' . $e->getMessage()
-            ], 500);
+                'message' => 'File not found',
+            ], 404);
         }
+
+        $host = env('DB_HOST', '127.0.0.1');
+        $port = env('DB_PORT', 3306);
+        $user = env('DB_USERNAME');
+        $pass = env('DB_PASSWORD');
+        $db   = env('DB_DATABASE');
+
+        $command = "mysql -h {$host} -P {$port} -u {$user} --password={$pass} {$db} < \"{$filePath}\"";
+
+        exec($command);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Restore completed',
+        ]);
     }
 }

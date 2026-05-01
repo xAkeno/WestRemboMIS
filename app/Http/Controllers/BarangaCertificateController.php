@@ -13,7 +13,7 @@ use App\Models\Ticket;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use App\Models\ActivityLogger;
-
+use Illuminate\Support\Facades\DB;
 class BarangaCertificateController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -191,40 +191,67 @@ class BarangaCertificateController extends Controller
 
     public function store(StoreBarangayCertificateRequest $request)
     {
-        $lastCertificate = BarangayCertificate::latest('created_at')->first();
-        $lastNumber      = $lastCertificate ? intval(substr($lastCertificate->bcert_number, 6)) : 0;
-        $newRecord       = 'BCERT-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+        DB::beginTransaction();
 
-        $data                 = $request->validated();
-        
-        $data['bcert_number'] = $newRecord;
-        $data['status']       = 'ENCODED';
-        $data['created_by']   = $this->getUserIdFromAuthToken();
-        $data['updated_by']   = $this->getUserIdFromAuthToken();
+        try {
+            // ✅ Safely get latest number from BCERT-XXX
+            $lastNumber = DB::table('barangay_certificates')
+                ->lockForUpdate()
+                ->selectRaw("
+                    COALESCE(
+                        MAX(CAST(SUBSTRING(bcert_number FROM '[0-9]+$') AS INTEGER)),
+                        0
+                    ) as max_num
+                ")
+                ->value('max_num');
 
-        $certificate = BarangayCertificate::create($data);
+            $nextNumber = $lastNumber + 1;
 
-        activity_log('Barangay Certificate Created', 'create', 'Created BCERT #: ' . $certificate->bcert_number);
+            $newRecord = 'BCERT-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
 
-        // FIX: Kiosk stores the field as `surname`, not `last_name`
-        // Note: BarangayCertificate uses `firstname` (no underscore), unlike other models
-        $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Certificate')
-            ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
-            ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
-            ->first();
+            // ✅ Your original logic
+            $data                 = $request->validated();
+            $data['bcert_number'] = $newRecord;
+            $data['status']       = 'ENCODED';
+            $data['created_by']   = $this->getUserIdFromAuthToken();
+            $data['updated_by']   = $this->getUserIdFromAuthToken();
 
-        if ($kiosk) {
-            Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
-                ->where('serviceable_id', $kiosk->id)
-                ->whereIn('status', ['pending', 'waiting', 'Pending'])
-                ->update(['status' => 'called']);
+            $certificate = BarangayCertificate::create($data);
+
+            activity_log(
+                'Barangay Certificate Created',
+                'create',
+                'Created BCERT #: ' . $certificate->bcert_number
+            );
+
+            // ✅ Kiosk logic (unchanged)
+            $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Certificate')
+                ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
+                ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
+                ->first();
+
+            if ($kiosk) {
+                Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                    ->where('serviceable_id', $kiosk->id)
+                    ->whereIn('status', ['pending', 'waiting', 'Pending'])
+                    ->update(['status' => 'called']);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Barangay Certificate created successfully',
+                'data'    => [
+                    'service' => $certificate,
+                    'ticket'  => null
+                ],
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
         }
-
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'Barangay Certificate created successfully',
-            'data'    => ['service' => $certificate, 'ticket' => null],
-        ], 201);
     }
 
     public function latestRecord()

@@ -6,47 +6,37 @@ WORKDIR /var/www/html
 # System dependencies
 # =========================
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    zip \
-    curl \
-    ghostscript \
-    libpq-dev \
-    libzip-dev \
-    libpng-dev \
-    libjpeg-dev \
-    libfreetype6-dev \
-    libgmp-dev \
-    libonig-dev \
-    libxml2-dev \
-    ca-certificates \
-    postgresql-client \
+    git unzip zip curl ghostscript \
+    libpq-dev libzip-dev \
+    libpng-dev libjpeg-dev libfreetype6-dev \
+    libgmp-dev libonig-dev libxml2-dev \
+    ca-certificates postgresql-client \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
-        pdo \
-        pdo_pgsql \
-        zip \
-        mbstring \
-        xml \
-        bcmath \
-        gd \
-        gmp
+        pdo pdo_pgsql zip mbstring xml bcmath gd gmp tokenizer ctype
 
 # =========================
 # Composer
 # =========================
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
+ENV COMPOSER_ALLOW_SUPERUSER=1
+ENV COMPOSER_MEMORY_LIMIT=-1
+
 # =========================
-# Copy composer first (cache optimization 🔥)
+# Copy composer first
 # =========================
 COPY composer.json composer.lock ./
+
+# temp env fix
+RUN cp .env.example .env || true
 
 RUN composer install \
     --no-dev \
     --no-interaction \
     --prefer-dist \
-    --optimize-autoloader
+    --optimize-autoloader \
+    -vvv
 
 # =========================
 # Copy rest of project
@@ -54,10 +44,9 @@ RUN composer install \
 COPY . .
 
 # =========================
-# Laravel permissions
+# Permissions
 # =========================
 RUN mkdir -p storage bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
 # =========================

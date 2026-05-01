@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 use App\Models\Ticket;
 use Carbon\Carbon;
 use App\Models\ActivityLogger;
-
+use Illuminate\Support\Facades\DB;
 class BarangayBusinessClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -188,38 +188,67 @@ class BarangayBusinessClearanceController extends Controller
      */
     public function store(StoreBarangayBusinessClearanceRequest $request)
     {
-        $lastClearance = BarangayBusinessClearance::latest('created_at')->first();
-        $lastNumber    = $lastClearance ? intval(substr($lastClearance->brgy_business_no, 11)) : 0;
-        $newRecord     = 'BBUSINESS-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+        DB::beginTransaction();
 
-        $data                    = $request->validated();
-        $data['brgy_business_no'] = $newRecord;
-        $data['status']          = 'ENCODED';
-        $data['created_by']      = $this->getUserIdFromAuthToken();
-        $data['updated_by']      = $this->getUserIdFromAuthToken();
+        try {
+            // ✅ Get latest number safely (PostgreSQL)
+            $lastNumber = DB::table('barangay_business_clearances')
+                ->lockForUpdate()
+                ->selectRaw("
+                    COALESCE(
+                        MAX(CAST(SUBSTRING(brgy_business_no FROM '[0-9]+$') AS INTEGER)),
+                        0
+                    ) as max_num
+                ")
+                ->value('max_num');
 
-        $clearance = BarangayBusinessClearance::create($data);
+            $nextNumber = $lastNumber + 1;
 
-        activity_log('Business Clearance Created', 'create', 'Created #: ' . $clearance->brgy_business_no);
+            $newRecord = 'BBUSINESS-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
 
-        // FIX: Kiosk stores the field as `surname`, not `last_name`
-        $kiosk = \App\Models\Kiosk::where('service_type', 'Business Clearance')
-            ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
-            ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
-            ->first();
+            // ✅ Your original logic
+            $data                     = $request->validated();
+            $data['brgy_business_no'] = $newRecord;
+            $data['status']           = 'ENCODED';
+            $data['created_by']       = $this->getUserIdFromAuthToken();
+            $data['updated_by']       = $this->getUserIdFromAuthToken();
 
-        if ($kiosk) {
-            Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
-                ->where('serviceable_id', $kiosk->id)
-                ->whereIn('status', ['pending', 'waiting', 'Pending'])
-                ->update(['status' => 'called']);
+            $clearance = BarangayBusinessClearance::create($data);
+
+            activity_log(
+                'Business Clearance Created',
+                'create',
+                'Created #: ' . $clearance->brgy_business_no
+            );
+
+            // ✅ Kiosk logic (unchanged)
+            $kiosk = \App\Models\Kiosk::where('service_type', 'Business Clearance')
+                ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
+                ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
+                ->first();
+
+            if ($kiosk) {
+                Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                    ->where('serviceable_id', $kiosk->id)
+                    ->whereIn('status', ['pending', 'waiting', 'Pending'])
+                    ->update(['status' => 'called']);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Business clearance created successfully',
+                'data'    => [
+                    'service' => $clearance,
+                    'ticket'  => null
+                ],
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
         }
-
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'Business clearance created successfully',
-            'data'    => ['service' => $clearance, 'ticket' => null],
-        ], 201);
     }
 
     public function latestRecord()

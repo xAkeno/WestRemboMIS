@@ -28,14 +28,34 @@ class DashboardController extends Controller
         $buildingClearance   = app(BarangayBuildingClearanceController::class)->chartData($request);
         $barangayCertificate = app(BarangaCertificateController::class)->chartData($request);
 
-        // ── Pending Counts per Service Type ─────────────────────────
-        $pendingStatuses = ['Pending', 'pending', 'for review', 'new', 'encoded', 'Encoded'];
+        // ── Comprehensive Record Counts per Service Type ──────────────
+        $incompleteStatuses = ['Pending', 'pending', 'for review', 'new', 'encoded', 'Encoded'];
 
-        $pendingCounts = [
-            'Barangay Clearance'   => BarangayClearance::whereIn('status', $pendingStatuses)->count(),
-            'Business Clearance'   => BarangayBusinessClearance::whereIn('status', $pendingStatuses)->count(),
-            'Building Clearance'   => BarangayBuildingClearance::whereIn('status', $pendingStatuses)->count(),
-            'Barangay Certificate' => BarangayCertificate::whereIn('status', $pendingStatuses)->count(),
+        $recordsCounts = [
+            'Barangay Clearance' => [
+                'total'      => BarangayClearance::count(),
+                'released'   => BarangayClearance::where('status', 'RELEASED')->count(),
+                'incomplete' => BarangayClearance::whereIn('status', $incompleteStatuses)->count(),
+                'rejected'   => BarangayClearance::where('status', 'REJECTED')->count(),
+            ],
+            'Business Clearance' => [
+                'total'      => BarangayBusinessClearance::count(),
+                'released'   => BarangayBusinessClearance::where('status', 'RELEASED')->count(),
+                'incomplete' => BarangayBusinessClearance::whereIn('status', $incompleteStatuses)->count(),
+                'rejected'   => BarangayBusinessClearance::where('status', 'REJECTED')->count(),
+            ],
+            'Building Clearance' => [
+                'total'      => BarangayBuildingClearance::count(),
+                'released'   => BarangayBuildingClearance::where('status', 'RELEASED')->count(),
+                'incomplete' => BarangayBuildingClearance::whereIn('status', $incompleteStatuses)->count(),
+                'rejected'   => BarangayBuildingClearance::where('status', 'REJECTED')->count(),
+            ],
+            'Barangay Certificate' => [
+                'total'      => BarangayCertificate::count(),
+                'released'   => BarangayCertificate::where('status', 'RELEASED')->count(),
+                'incomplete' => BarangayCertificate::whereIn('status', $incompleteStatuses)->count(),
+                'rejected'   => BarangayCertificate::where('status', 'REJECTED')->count(),
+            ],
         ];
 
         // ── Notifications ─────────────────────────────────────────────
@@ -65,9 +85,6 @@ class DashboardController extends Controller
                     'created_at'  => $log->created_at,
                 ]);
         }
-
-        // ── Total Released Today ──────────────────────────────────────
-        $totalReleasedToday = BcertModel::where('status', 'RELEASED')->count();
 
         // ── Today's date (respects app timezone) ──────────────────────
         $today = Carbon::now(config('app.timezone'))->toDateString();
@@ -100,17 +117,16 @@ class DashboardController extends Controller
 
         return response()->json([
             'data' => [
-                // ── Charthhhhhhhhhhh ───────────────────────────────────────────
+                // ── Charts ──────────────────────────────────────────
                 'barangay_clearances'   => $barangayClearance->getData(),
                 'business_clearances'   => $businessClearance->getData(),
                 'building_clearances'   => $buildingClearance->getData(),
                 'barangay_certificates' => $barangayCertificate->getData(),
 
                 // ── Meta ────────────────────────────────────────────
-                'pending_counts'       => $pendingCounts,
+                'records_counts'       => $recordsCounts,
                 'notifications'        => $notifications,
                 'latest_activities'    => $latestActivities,
-                'total_released_today' => $totalReleasedToday,
 
                 // ── Lists: only records scheduled for today ───────────
                 'barangay_certificates_list' => $todayList(
