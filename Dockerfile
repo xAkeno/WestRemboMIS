@@ -21,8 +21,6 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     ca-certificates \
     postgresql-client \
-    && which pg_dump \
-    && pg_dump --version \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo \
