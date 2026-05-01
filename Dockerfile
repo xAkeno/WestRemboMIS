@@ -5,7 +5,7 @@ WORKDIR /var/www/html
 # =========================
 # System dependencies
 # =========================
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y \
     git \
     unzip \
     zip \
@@ -14,35 +14,41 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     libzip-dev \
     libpng-dev \
-    libjpeg62-turbo-dev \
+    libjpeg-dev \
     libfreetype6-dev \
     libgmp-dev \
+    libonig-dev \
     libxml2-dev \
     ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    postgresql-client \
+    && which pg_dump \
+    && pg_dump --version \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+        pdo \
+        pdo_pgsql \
+        zip \
+        mbstring \
+        xml \
+        bcmath \
+        gd \
+        gmp
 
 # =========================
 # Composer
 # =========================
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-ENV COMPOSER_ALLOW_SUPERUSER=1
-ENV COMPOSER_MEMORY_LIMIT=-1
-
 # =========================
-# Copy composer first
+# Copy composer first (cache optimization 🔥)
 # =========================
 COPY composer.json composer.lock ./
-
-# temp env fix
-RUN cp .env.example .env || true
 
 RUN composer install \
     --no-dev \
     --no-interaction \
     --prefer-dist \
-    --optimize-autoloader \
-    -vvv
+    --optimize-autoloader
 
 # =========================
 # Copy rest of project
@@ -50,9 +56,10 @@ RUN composer install \
 COPY . .
 
 # =========================
-# Permissions
+# Laravel permissions
 # =========================
 RUN mkdir -p storage bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
 # =========================
