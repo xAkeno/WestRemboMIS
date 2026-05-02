@@ -189,24 +189,24 @@ class BarangaCertificateController extends Controller
         ]);
     }
 
-    public function store(StoreBarangayClearanceRequest $request)
+    public function store(StoreBarangayCertificateRequest $request)
     {
         DB::beginTransaction();
 
         try {
-            // ✅ Step 1: Lock a real row (NOT aggregate)
-            $exists = DB::table('barangay_clearances')->exists();
+            // ✅ Step 1: Lock a real row (certificate table)
+            $exists = DB::table('barangay_certificates')->exists();
 
             if ($exists) {
-                DB::table('barangay_clearances')
+                DB::table('barangay_certificates')
                     ->orderByDesc('id')
                     ->limit(1)
                     ->lockForUpdate()
                     ->get();
             }
 
-            // ✅ Step 2: Get max number safely
-            $lastNumber = DB::table('barangay_clearances')
+            // ✅ Step 2: Get max number from CERTIFICATE table
+            $lastNumber = DB::table('barangay_certificates')
                 ->selectRaw("
                     COALESCE(
                         MAX(CAST(SUBSTRING(bcert_number FROM '[0-9]+$') AS INTEGER)),
@@ -217,25 +217,26 @@ class BarangaCertificateController extends Controller
 
             $nextNumber = $lastNumber + 1;
 
-            $newRecord = 'BCLEAR-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+            // ✅ Correct prefix
+            $newRecord = 'BCERT-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
 
-            // ✅ Your original logic
+            // ✅ Correct data + model
             $data                 = $request->validated();
             $data['bcert_number'] = $newRecord;
             $data['status']       = 'ENCODED';
             $data['created_by']   = $this->getUserIdFromAuthToken();
             $data['updated_by']   = $this->getUserIdFromAuthToken();
 
-            $clearance = BarangayClearance::create($data);
+            $certificate = BarangayCertificate::create($data);
 
             activity_log(
-                'Barangay Clearance Created',
+                'Barangay Certificate Created',
                 'create',
-                'Created #: ' . $clearance->bcert_number
+                'Created BCERT #: ' . $certificate->bcert_number
             );
 
-            // ✅ Kiosk logic (unchanged)
-            $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
+            // ✅ Correct service type
+            $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Certificate')
                 ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
                 ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
                 ->first();
@@ -251,9 +252,9 @@ class BarangaCertificateController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Barangay clearance created successfully',
+                'message' => 'Barangay Certificate created successfully',
                 'data'    => [
-                    'service' => $clearance,
+                    'service' => $certificate,
                     'ticket'  => null
                 ],
             ], 201);
