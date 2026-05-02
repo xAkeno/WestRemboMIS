@@ -178,9 +178,16 @@ class BarangayClearanceController extends Controller
         DB::beginTransaction();
 
         try {
-            // ✅ Get latest number safely (PostgreSQL compatible)
-            $lastNumber = DB::table('barangay_clearances')
+            // ✅ Step 1: Lock rows FIRST (no aggregate)
+            DB::table('barangay_clearances')
+                ->select('id')
+                ->orderByDesc('id')
+                ->limit(1)
                 ->lockForUpdate()
+                ->get();
+
+            // ✅ Step 2: Get MAX safely
+            $lastNumber = DB::table('barangay_clearances')
                 ->selectRaw("
                     COALESCE(
                         MAX(CAST(SUBSTRING(bcert_number FROM '[0-9]+$') AS INTEGER)),

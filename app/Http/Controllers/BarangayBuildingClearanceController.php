@@ -188,9 +188,16 @@ class BarangayBuildingClearanceController extends Controller
         DB::beginTransaction();
 
         try {
-            // ✅ Safely get highest numeric suffix from bcert_number
-            $lastNumber = DB::table('barangay_building_clearances')
+            // ✅ Step 1: Lock the table rows (no aggregate here)
+            DB::table('barangay_building_clearances')
+                ->select('id')
+                ->orderByDesc('id')
+                ->limit(1)
                 ->lockForUpdate()
+                ->get();
+
+            // ✅ Step 2: Now safely compute MAX (no lock here)
+            $lastNumber = DB::table('barangay_building_clearances')
                 ->selectRaw("
                     COALESCE(
                         MAX(CAST(SUBSTRING(bcert_number FROM '[0-9]+$') AS INTEGER)),
