@@ -13,72 +13,85 @@ class BackupController extends Controller
      * CREATE ENCRYPTED BACKUP using pg_dump
      */
     public function runDatabaseBackup()
-    {
-        try {
-            $dbName = env('DB_DATABASE');
-            $host   = env('DB_HOST');
-            $port   = env('DB_PORT', 5432);
-            $user   = env('DB_USERNAME');
-            $pass   = env('DB_PASSWORD');
+{
+    try {
+        $dbName = env('DB_DATABASE');
+        $host   = env('DB_HOST');
+        $port   = env('DB_PORT', 5432);
+        $user   = env('DB_USERNAME');
+        $pass   = env('DB_PASSWORD');
 
-            $date     = now()->format('Y-m-d_H-i-s');
-            $fileName = "backup_{$dbName}_{$date}.sql";
-            $tempPath = storage_path("app/backups/{$fileName}");
-            $encryptedPath = storage_path("app/backups/encrypted_{$fileName}.enc");
+        $date     = now()->format('Y-m-d_H-i-s');
+        $fileName = "backup_{$dbName}_{$date}.sql";
+        $backupDir = storage_path('app/backups');
+        $tempPath = "{$backupDir}/{$fileName}";
 
-            if (!file_exists(storage_path('app/backups'))) {
-                mkdir(storage_path('app/backups'), 0777, true);
-            }
+        if (!file_exists($backupDir)) {
+            mkdir($backupDir, 0755, true);
+        }
 
-            // Execute pg_dump
-            $command = "PGPASSWORD='{$pass}' pg_dump -h {$host} -p {$port} -U {$user} --no-owner --no-privileges -F p {$dbName} 2>&1";
-            
-            exec($command, $output, $returnCode);
-            $sql = implode("\n", $output);
-            
-            if ($returnCode !== 0 || empty($sql)) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Backup failed: ' . $sql,
-                    'return_code' => $returnCode
-                ], 500);
-            }
+        // Write password to temp pgpass file to avoid shell injection
+        $pgpassFile = tempnam(sys_get_temp_dir(), 'pgpass_');
+        file_put_contents($pgpassFile, "{$host}:{$port}:{$dbName}:{$user}:{$pass}");
+        chmod($pgpassFile, 0600);
 
-            // Save unencrypted backup locally
-            file_put_contents($tempPath, $sql);
-            
-            // Encrypt the file
-            $this->encryptFile($tempPath, $encryptedPath);
-            
-            // Upload encrypted file to S3
-            $s3Path = Storage::disk('s3')->putFileAs(
-                'encrypted_backups',
-                new \Illuminate\Http\File($encryptedPath),
-                "encrypted_{$fileName}.enc"
-            );
+        // Dump directly to file (not via stdout capture)
+        $command = sprintf(
+            'PGPASSFILE=%s pg_dump -h %s -p %s -U %s --no-owner --no-privileges -F p -f %s %s 2>&1',
+            escapeshellarg($pgpassFile),
+            escapeshellarg($host),
+            escapeshellarg((string)$port),
+            escapeshellarg($user),
+            escapeshellarg($tempPath),
+            escapeshellarg($dbName)
+        );
 
-            // Clean up temp files
-            unlink($tempPath);
-            
-            // Keep encrypted local copy
-            $encryptedSize = filesize($encryptedPath);
-            
-            return response()->json([
-                'success' => true,
-                'file'    => "encrypted_{$fileName}.enc",
-                'path'    => $s3Path,
-                'original_size_kb' => round(strlen($sql) / 1024, 2),
-                'encrypted_size_kb' => round($encryptedSize / 1024, 2),
-                'encrypted' => true
-            ]);
-            
-        } catch (\Exception $e) {
+        exec($command, $output, $returnCode);
+        unlink($pgpassFile); // Clean up pgpass file
+
+        $outputText = implode("\n", $output);
+
+        if ($returnCode !== 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Backup failed: ' . $e->getMessage()
+                'message' => 'pg_dump failed: ' . $outputText,
+                'return_code' => $returnCode
             ], 500);
         }
+
+        if (!file_exists($tempPath) || filesize($tempPath) === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Backup file was not created or is empty. Output: ' . $outputText
+            ], 500);
+        }
+
+        $sizeKb = round(filesize($tempPath) / 1024, 2);
+
+        // Upload to S3
+        try {
+            Storage::disk('s3')->putFileAs(
+                'backups',
+                new \Illuminate\Http\File($tempPath),
+                $fileName
+            );
+        } catch (\Exception $s3e) {
+            \Log::warning('S3 upload failed, keeping local only: ' . $s3e->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'file'    => $fileName,
+            'size_kb' => $sizeKb
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Backup failed: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * RESTORE FROM ENCRYPTED FILE
@@ -179,6 +192,39 @@ class BackupController extends Controller
             ], 500);
         }
     }
+
+
+        public function downloadBackup($fileName)
+{
+    try {
+        $fileName = basename($fileName); // Prevent path traversal
+        $localPath = storage_path("app/backups/{$fileName}");
+
+        // Try local first
+        if (file_exists($localPath)) {
+            return response()->download($localPath, $fileName, [
+                'Content-Type' => 'application/octet-stream',
+            ]);
+        }
+
+        // Try S3
+        if (Storage::disk('s3')->exists("backups/{$fileName}")) {
+            $content = Storage::disk('s3')->get("backups/{$fileName}");
+            $tempPath = storage_path("app/backups/dl_temp_{$fileName}");
+            file_put_contents($tempPath, $content);
+
+            return response()->download($tempPath, $fileName, [
+                'Content-Type' => 'application/octet-stream',
+            ])->deleteFileAfterSend(true);
+        }
+
+        return response()->json(['success' => false, 'message' => 'File not found'], 404);
+
+    } catch (\Exception $e) {
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+    }
+}
+
 
     /**
      * ENCRYPT FILE using OpenSSL with proper key derivation

@@ -258,28 +258,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     // Route::post('/backup/restore-upload', [BackupController::class, 'restoreUpload']);
     // Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
 
-    Route::prefix('backup')->group(function () {
-        // Create backup
-        Route::post('/create', [BackupController::class, 'runDatabaseBackup']);
-        
-        // Restore from file
-        Route::post('/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
-        
-        // Restore from upload
-        Route::post('/restore-upload', [BackupController::class, 'restoreFromUpload']);
-        
-        // List backups
-        Route::get('/list', [BackupController::class, 'listBackups']);
-        
-        // Delete backup
-        Route::delete('/delete/{fileName}', [BackupController::class, 'deleteBackup']);
-        
-        // Debug database
-        Route::get('/debug', [BackupController::class, 'debugDatabase']);
-        
-        // Test encryption
-        Route::get('/test-encryption', [BackupController::class, 'testEncryption']);
-    });
+     
 
     // Add this route for downloading backups
     Route::get('/backup/download/{fileName}', function ($fileName) {
