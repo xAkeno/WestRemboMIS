@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 use App\Models\Ticket;
 use Carbon\Carbon;
 use App\Models\ActivityLogger;
-
+use Illuminate\Support\Facades\DB;
 class BarangayClearanceController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -175,38 +175,74 @@ class BarangayClearanceController extends Controller
      */
     public function store(StoreBarangayClearanceRequest $request)
     {
-        $lastClearance = BarangayClearance::latest('created_at')->first();
-        $lastNumber    = $lastClearance ? intval(substr($lastClearance->bcert_number, 8)) : 0;
-        $newRecord     = 'BCLEAR-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+        DB::beginTransaction();
 
-        $data                 = $request->validated();
-        $data['bcert_number'] = $newRecord;
-        $data['status']       = 'ENCODED';
-        $data['created_by']   = $this->getUserIdFromAuthToken();
-        $data['updated_by']   = $this->getUserIdFromAuthToken();
+        try {
+            // ✅ Step 1: Lock rows FIRST (no aggregate)
+            DB::table('barangay_clearances')
+                ->select('id')
+                ->orderByDesc('id')
+                ->limit(1)
+                ->lockForUpdate()
+                ->get();
 
-        $clearance = BarangayClearance::create($data);
+            // ✅ Step 2: Get MAX safely
+            $lastNumber = DB::table('barangay_clearances')
+                ->selectRaw("
+                    COALESCE(
+                        MAX(CAST(SUBSTRING(bcert_number FROM '[0-9]+$') AS INTEGER)),
+                        0
+                    ) as max_num
+                ")
+                ->value('max_num');
 
-        activity_log('Barangay Clearance Created', 'create', 'Created #: ' . $clearance->bcert_number);
+            $nextNumber = $lastNumber + 1;
 
-        // FIX: Kiosk stores the field as `surname`, not `last_name`
-        $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
-            ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
-            ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
-            ->first();
+            $newRecord = 'BCLEAR-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
 
-        if ($kiosk) {
-            Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
-                ->where('serviceable_id', $kiosk->id)
-                ->whereIn('status', ['pending', 'waiting', 'Pending'])
-                ->update(['status' => 'called']);
+            // ✅ Your original logic
+            $data                 = $request->validated();
+            $data['bcert_number'] = $newRecord;
+            $data['status']       = 'ENCODED';
+            $data['created_by']   = $this->getUserIdFromAuthToken();
+            $data['updated_by']   = $this->getUserIdFromAuthToken();
+
+            $clearance = BarangayClearance::create($data);
+
+            activity_log(
+                'Barangay Clearance Created',
+                'create',
+                'Created #: ' . $clearance->bcert_number
+            );
+
+            // ✅ Kiosk matching (unchanged)
+            $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
+                ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
+                ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
+                ->first();
+
+            if ($kiosk) {
+                Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                    ->where('serviceable_id', $kiosk->id)
+                    ->whereIn('status', ['pending', 'waiting', 'Pending'])
+                    ->update(['status' => 'called']);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Barangay clearance created successfully',
+                'data'    => [
+                    'service' => $clearance,
+                    'ticket'  => null
+                ],
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
         }
-
-        return response()->json([
-            'status'  => 'success',
-            'message' => 'Barangay clearance created successfully',
-            'data'    => ['service' => $clearance, 'ticket' => null],
-        ], 201);
     }
 
     public function latestRecord()

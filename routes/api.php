@@ -258,27 +258,13 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     // Route::post('/backup/restore-upload', [BackupController::class, 'restoreUpload']);
     // Route::post('/backup/scheduled', [BackupController::class, 'runScheduledBackup']);
 
-     
+    Route::post('/backup/database', [BackupController::class, 'runDatabaseBackup']);
 
-    // Add this route for downloading backups
-    Route::get('/backup/download/{fileName}', function ($fileName) {
-        $fileName = basename($fileName);
-        $localPath = storage_path("app/backups/{$fileName}");
-        
-        if (file_exists($localPath)) {
-            return response()->download($localPath, $fileName);
-        }
-        
-        // Check S3
-        if (Storage::disk('s3')->exists("encrypted_backups/{$fileName}")) {
-            $content = Storage::disk('s3')->get("encrypted_backups/{$fileName}");
-            return response($content, 200)
-                ->header('Content-Type', 'application/octet-stream')
-                ->header('Content-Disposition', "attachment; filename={$fileName}");
-        }
-        
-        return response()->json(['error' => 'File not found'], 404);
-    })->name('backup.download');
+    Route::get('/backup', [BackupController::class, 'listBackups']);
+
+    Route::get('/backup/{fileName}/download', [BackupController::class, 'downloadBackup']);
+    Route::post('/backup/restore-upload', [BackupController::class, 'restoreFromUpload']);
+    Route::post('/backup/restore/{fileName}', [BackupController::class, 'restoreFromFile']);
     // ─── DocumentController (admin: templates / layouts) ─────────────────────
     Route::get('/documents/admin',        [DocumentController::class, 'index']);
     Route::post('/documents/admin',       [DocumentController::class, 'store']);
