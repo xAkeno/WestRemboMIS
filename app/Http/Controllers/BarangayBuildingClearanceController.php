@@ -326,7 +326,7 @@ class BarangayBuildingClearanceController extends Controller
     public function updateStatusBuilding(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,DISABLED',
         ]);
 
         $record = BarangayBuildingClearance::findOrFail($id);
@@ -359,6 +359,7 @@ class BarangayBuildingClearanceController extends Controller
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Building Clearance.'],
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Building Clearance is ready for payment.'],
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Building Clearance is currently being inspected.'],
+            'DISABLED'   => ['label' => 'Disabled',   'message' => 'Your Building Clearance has been disabled.'],
         ];
 
         $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -387,6 +388,7 @@ class BarangayBuildingClearanceController extends Controller
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
+            'DISABLED' => 'disabled',
         ];
 
         $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
@@ -457,6 +459,10 @@ class BarangayBuildingClearanceController extends Controller
             'INCOMPLETE' => [
                 'label' => 'Incomplete',
                 'message' => 'Your Building Clearance application is incomplete.'
+            ],
+            'DISABLED' => [
+                'label' => 'Disabled',
+                'message' => 'Your Building Clearance has been disabled.'
             ],
         ];
 

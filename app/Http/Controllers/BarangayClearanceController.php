@@ -345,7 +345,7 @@ class BarangayClearanceController extends Controller
     public function updateStatusClearance(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,DISABLED'
         ]);
 
         $record = BarangayClearance::findOrFail($id);
@@ -376,6 +376,7 @@ class BarangayClearanceController extends Controller
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment for your Barangay Clearance has been confirmed.'],
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Clearance is currently being inspected.'],
+            'DISABLED'   => ['label' => 'Disabled',   'message' => 'Your Barangay Clearance has been disabled.'],
         ];
 
         $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
@@ -410,6 +411,7 @@ class BarangayClearanceController extends Controller
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
+            'DISABLED' => 'disabled',
         ];
 
         $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;

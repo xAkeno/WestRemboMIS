@@ -320,7 +320,7 @@ class BarangaCertificateController extends Controller
     public function updateStatus(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,DISABLED',
         ]);
 
         $record = BarangayCertificate::findOrFail($id);
@@ -353,6 +353,7 @@ class BarangaCertificateController extends Controller
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Barangay Certificate.'],
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Certificate is ready for payment.'],
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Certificate is currently being inspected.'],
+            'DISABLED'   => ['label' => 'Disabled',   'message' => 'Your Barangay Certificate has been disabled.'],
         ];
 
         $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -382,6 +383,7 @@ class BarangaCertificateController extends Controller
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
+            'DISABLED' => 'disabled',
         ];
 
         $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
@@ -450,6 +452,10 @@ class BarangaCertificateController extends Controller
             'INCOMPLETE' => [
                 'label' => 'Incomplete',
                 'message' => 'Your Barangay Certificate application is incomplete.'
+            ],
+            'DISABLED' => [
+                'label' => 'Disabled',
+                'message' => 'Your Barangay Certificate has been disabled.'
             ],
         ];
 
