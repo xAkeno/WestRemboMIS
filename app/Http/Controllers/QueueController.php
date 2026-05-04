@@ -129,21 +129,19 @@ class QueueController extends Controller
 
 
         // ─────────────────────────────────────────────
-        // GATE: status must be SCHEDULED AND scheduled_date == today.
+        // GATE (TEMPORARY — LOOSE): scheduled_date must be today.
+        // We intentionally do NOT require status === 'SCHEDULED' for now.
+        // Time-of-day is also ignored — only the calendar date is compared.
+        // Tighten this back to a strict status check when ready.
         // ─────────────────────────────────────────────
-        $statusOk = strtoupper((string) $item->status) === 'SCHEDULED';
-
-
         $scheduledDateRaw = $item->{self::SCHEDULED_DATE_COLUMN} ?? null;
         $scheduledDate    = $scheduledDateRaw ? Carbon::parse($scheduledDateRaw) : null;
         $scheduledIsToday = $scheduledDate ? $scheduledDate->isToday() : false;
 
 
-        if (!$statusOk || !$scheduledIsToday) {
+        if (!$scheduledIsToday) {
             // Build a precise reason for the frontend toast / error display.
-            if (!$statusOk) {
-                $message = 'Document is not scheduled. Only documents with status SCHEDULED can be added to the queue.';
-            } elseif (!$scheduledDate) {
+            if (!$scheduledDate) {
                 $message = 'Document has no scheduled date set.';
             } elseif ($scheduledDate->isFuture()) {
                 $message = 'Document is scheduled for ' . $scheduledDate->toDateString() . '. It can only be queued on its scheduled day.';
