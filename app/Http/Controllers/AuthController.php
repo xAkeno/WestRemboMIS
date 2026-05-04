@@ -23,109 +23,105 @@ class AuthController extends Controller
      * Register a new user
      */
     public function register(Request $request)
-{
-    // ── STEP 1: Validate all fields including recaptcha_token ──
-    $request->validate([
-        'recaptcha_token'    => 'required|string',
-        'first_name'         => 'required|string|max:255',
-        'surname'            => 'required|string|max:255',
-        'email'              => 'required|email:rfc,dns|max:255|unique:users,email',
-        'contact_number'     => 'required|regex:/^[0-9+\-() ]+$/|max:20',
-        'date_of_birth'      => 'required|date',
-        'sex'                => 'required|in:Male,Female,Other',
-        'password'           => 'required|string|min:8|confirmed',
-        'id_url'             => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
-        'id_url_back'        => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
-        'house_block_lot_no' => 'required|string|max:255',
-        'street'             => 'required|string|max:255',
-        'zone_purok'         => 'required|string|max:255',
-    ]);
+    {
+        // ── STEP 1: Validate all fields including recaptcha_token ──
+        $request->validate([
+            'recaptcha_token'    => 'required|string',
+            'first_name'         => 'required|string|max:255',
+            'surname'            => 'required|string|max:255',
+            'email'              => 'required|email:rfc,dns|max:255|unique:users,email',
+            'contact_number'     => 'required|regex:/^[0-9+\-() ]+$/|max:20',
+            'date_of_birth'      => 'required|date',
+            'sex'                => 'required|in:Male,Female,Other',
+            'password'           => 'required|string|min:8|confirmed',
+            'id_url'             => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'id_url_back'        => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'house_block_lot_no' => 'required|string|max:255',
+            'street'             => 'required|string|max:255',
+            'zone_purok'         => 'required|string|max:255',
+        ]);
 
-    // ── STEP 2: Verify reCAPTCHA with Google (only once) ──
-    $recaptchaResponse = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
-        'secret'   => env('RECAPTCHA_SECRET_KEY'),
-        'response' => $request->recaptcha_token,
-        'remoteip' => $request->ip(),
-    ]);
+        // ── STEP 2: Verify reCAPTCHA with Google ──
+        $recaptchaResponse = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+            'secret'   => env('RECAPTCHA_SECRET_KEY'),
+            'response' => $request->recaptcha_token,
+            'remoteip' => $request->ip(),
+        ]);
 
-    $recaptchaResult = $recaptchaResponse->json();
+        $recaptchaResult = $recaptchaResponse->json();
 
-    
+        if (empty($recaptchaResult['success']) || $recaptchaResult['success'] !== true) {
+            return response()->json([
+                'message' => 'reCAPTCHA verification failed. Please try again.',
+            ], 422);
+        }
 
-    if (empty($recaptchaResult['success']) || $recaptchaResult['success'] !== true) {
+        // ── STEP 3: Upload front ID ──
+        $imagePath = null;
+        if ($request->hasFile('id_url')) {
+            $imagePath = Storage::disk('s3')->putFile('ids', $request->file('id_url'));
+        }
+
+        // ── STEP 4: Upload back ID ──
+        $imagePathBack = null;
+        if ($request->hasFile('id_url_back')) {
+            $imagePathBack = Storage::disk('s3')->putFile('ids', $request->file('id_url_back'));
+        }
+
+        // ── STEP 5: Create user in Supabase ──
+        $supabaseResponse = Http::withHeaders([
+            'apikey'        => env('SUPABASE_SERVICE_ROLE_KEY'),
+            'Authorization' => 'Bearer ' . env('SUPABASE_SERVICE_ROLE_KEY'),
+            'Content-Type'  => 'application/json',
+        ])->post(env('SUPABASE_URL') . '/auth/v1/admin/users', [
+            'email'         => $request->email,
+            'password'      => $request->password,
+            'email_confirm' => true,
+        ]);
+
+        if (!$supabaseResponse->successful()) {
+            return response()->json([
+                'status'  => 'failed',
+                'message' => 'Failed to create user in Supabase',
+                'error'   => $supabaseResponse->json(),
+            ], 500);
+        }
+
+        $supabaseUser = $supabaseResponse->json();
+
+        // ── STEP 6: Create user in Laravel ──
+        $user = User::create([
+            'first_name'         => $request->first_name,
+            'surname'            => $request->surname,
+            'email'              => $request->email,
+            'contact_number'     => $request->contact_number,
+            'sex'                => $request->sex,
+            'date_of_birth'      => $request->date_of_birth,
+            'house_block_lot_no' => $request->house_block_lot_no,
+            'street'             => $request->street,
+            'zone_purok'         => $request->zone_purok,
+            'password'           => Hash::make($request->password),
+            'id_url'             => $imagePath,
+            'id_url_back'        => $imagePathBack,
+            'supabase_id'        => $supabaseUser['id'] ?? null,
+        ]);
+
+        // ── STEP 7: Send verification email ──
+        $code = rand(100000, 999999);
+        $user->update([
+            'email_verification_code'       => $code,
+            'email_verification_expires_at' => now()->addMinutes(10),
+        ]);
+        Mail::to($user->email)->send(new VerificationCodeMail($code));
+
         return response()->json([
-            'message' => 'reCAPTCHA verification failed. Please try again.',
-        ], 422);
+            'status'  => 'success',
+            'message' => 'Account created successfully (Synced with Supabase)',
+            'data'    => $user,
+        ], 201);
     }
 
-    // ── STEP 3: Upload front ID ──
-    $imagePath = null;
-    if ($request->hasFile('id_url')) {
-        $imagePath = Storage::disk('s3')->putFile('ids', $request->file('id_url'));
-    }
-
-    // ── STEP 4: Upload back ID ──
-    $imagePathBack = null;
-    if ($request->hasFile('id_url_back')) {
-        $imagePathBack = Storage::disk('s3')->putFile('ids', $request->file('id_url_back'));
-    }
-
-    // ── STEP 5: Create user in Supabase ──
-    $supabaseResponse = Http::withHeaders([
-        'apikey'        => env('SUPABASE_SERVICE_ROLE_KEY'),
-        'Authorization' => 'Bearer ' . env('SUPABASE_SERVICE_ROLE_KEY'),
-        'Content-Type'  => 'application/json',
-    ])->post(env('SUPABASE_URL') . '/auth/v1/admin/users', [
-        'email'         => $request->email,
-        'password'      => $request->password,
-        'email_confirm' => true,
-    ]);
-
-    if (!$supabaseResponse->successful()) {
-        return response()->json([
-            'status'  => 'failed',
-            'message' => 'Failed to create user in Supabase',
-            'error'   => $supabaseResponse->json(),
-        ], 500);
-    }
-
-    $supabaseUser = $supabaseResponse->json();
-
-    // ── STEP 6: Create user in Laravel ──
-    $user = User::create([
-        'first_name'         => $request->first_name,
-        'surname'            => $request->surname,
-        'email'              => $request->email,
-        'contact_number'     => $request->contact_number,
-        'sex'                => $request->sex,
-        'date_of_birth'      => $request->date_of_birth,
-        'house_block_lot_no' => $request->house_block_lot_no,
-        'street'             => $request->street,
-        'zone_purok'         => $request->zone_purok,
-        'password'           => Hash::make($request->password),
-        'id_url'             => $imagePath,
-        'id_url_back'        => $imagePathBack,
-        'supabase_id'        => $supabaseUser['id'] ?? null,
-    ]);
-
-    // ── STEP 7: Send verification email ──
-    $code = rand(100000, 999999);
-    $user->update([
-        'email_verification_code'       => $code,
-        'email_verification_expires_at' => now()->addMinutes(10),
-    ]);
-    Mail::to($user->email)->send(new VerificationCodeMail($code));
-
-    return response()->json([
-        'status'  => 'success',
-        'message' => 'Account created successfully (Synced with Supabase)',
-        'data'    => $user,
-    ], 201);
-}
-
-    // ─── NEW: GET /api/user ───────────────────────────────────────────────────
-    // Used by DocumentUploadSection to pre-populate valid_id_front / valid_id_back
-    // slots from the registration upload when the user first logs in.
+    // ─── GET /api/user ────────────────────────────────────────────────────────
     public function user(Request $request)
     {
         $user = $request->user();
@@ -134,16 +130,11 @@ class AuthController extends Controller
             return response()->json(['status' => 'failed', 'message' => 'Unauthenticated'], 401);
         }
 
-        $workerBaseUrl = rtrim(env('R2_WORKER_URL', ''), '/');
+        $workerBaseUrl = rtrim(env('R2_WORKER_URL'), '/');
 
-        // Build full URLs from raw S3 paths (same pattern as show() / details())
-        $idFrontUrl = $user->id_url
-            ? $workerBaseUrl . '/' . ltrim($user->id_url, '/')
-            : null;
-
-        $idBackUrl = $user->id_url_back
-            ? $workerBaseUrl . '/' . ltrim($user->id_url_back, '/')
-            : null;
+        $photoUrl  = $user->url_photo   ? $workerBaseUrl . '/' . ltrim($user->url_photo, '/')   : asset('images/default-profile.png');
+        $idFrontUrl = $user->id_url     ? $workerBaseUrl . '/' . ltrim($user->id_url, '/')      : null;
+        $idBackUrl  = $user->id_url_back ? $workerBaseUrl . '/' . ltrim($user->id_url_back, '/') : null;
 
         return response()->json([
             'status' => 'success',
@@ -152,8 +143,8 @@ class AuthController extends Controller
                 'first_name'  => $user->first_name,
                 'surname'     => $user->surname,
                 'email'       => $user->email,
-                'id_url'      => $idFrontUrl,  // full URL ready for <img src>
-                'id_url_back' => $idBackUrl,   // full URL ready for <img src>
+                'id_url'      => $idFrontUrl,
+                'id_url_back' => $idBackUrl,
             ],
         ]);
     }
@@ -184,10 +175,10 @@ class AuthController extends Controller
     {
         $user = User::findOrFail($id);
 
-        // ── Step 1: Delete from Supabase (hard-fail if linked) ──────────────────
+        // ── Step 1: Delete from Supabase ─────────────────────────────────────
         if ($user->supabase_id) {
-            $supabaseUrl = rtrim(env('SUPABASE_URL'), '/') 
-                        . '/auth/v1/admin/users/' 
+            $supabaseUrl = rtrim(env('SUPABASE_URL'), '/')
+                        . '/auth/v1/admin/users/'
                         . $user->supabase_id;
 
             \Log::info('Attempting Supabase user deletion', [
@@ -207,20 +198,17 @@ class AuthController extends Controller
                     'body'   => $supabaseResponse->body(),
                 ]);
 
-                // 404 = user doesn't exist in Supabase — treat as already deleted, continue
-                // Anything else that isn't 2xx = real failure, block the deletion
                 if (!$supabaseResponse->successful() && $supabaseResponse->status() !== 404) {
                     return response()->json([
-                        'status'         => 'failed',
-                        'message'        => 'Failed to delete user from Supabase. Laravel record was NOT deleted.',
-                        'supabase_error' => $supabaseResponse->json(),
-                        'supabase_status'=> $supabaseResponse->status(),
+                        'status'          => 'failed',
+                        'message'         => 'Failed to delete user from Supabase. Laravel record was NOT deleted.',
+                        'supabase_error'  => $supabaseResponse->json(),
+                        'supabase_status' => $supabaseResponse->status(),
                     ], 500);
                 }
 
             } catch (\Exception $e) {
                 \Log::error('Supabase delete exception', ['error' => $e->getMessage()]);
-
                 return response()->json([
                     'status'  => 'failed',
                     'message' => 'Supabase connection error: ' . $e->getMessage(),
@@ -228,10 +216,10 @@ class AuthController extends Controller
             }
         }
 
-        // ── Step 2: Revoke all Sanctum tokens ───────────────────────────────────
+        // ── Step 2: Revoke all Sanctum tokens ────────────────────────────────
         $user->tokens()->delete();
 
-        // ── Step 3: Delete from Laravel ─────────────────────────────────────────
+        // ── Step 3: Delete from Laravel ──────────────────────────────────────
         $user->delete();
 
         \Log::info('User account permanently deleted', ['user_id' => $id]);
@@ -376,9 +364,9 @@ class AuthController extends Controller
         $addressParts = array_filter([$user->house_block_lot_no, $user->street, $user->zone_purok]);
         $fullAddress  = implode(', ', $addressParts);
 
-        $photoUrl = $user->url_photo ? $workerBaseUrl . '/' . ltrim($user->url_photo, '/') : null;
-        $idUrl    = $user->id_url    ? $workerBaseUrl . '/' . ltrim($user->id_url, '/')    : null;
-        $idUrlBack = $user->id_url_back ? $workerBaseUrl . '/' . ltrim($user->id_url_back, '/') : null;
+        $photoUrl  = $user->url_photo    ? $workerBaseUrl . '/' . ltrim($user->url_photo, '/')    : null;
+        $idUrl     = $user->id_url       ? $workerBaseUrl . '/' . ltrim($user->id_url, '/')       : null;
+        $idUrlBack = $user->id_url_back  ? $workerBaseUrl . '/' . ltrim($user->id_url_back, '/')  : null;
 
         return response()->json([
             'status' => 'success',
@@ -396,7 +384,7 @@ class AuthController extends Controller
                 'date_of_birth'          => $user->date_of_birth,
                 'url_photo'              => $photoUrl,
                 'id_url'                 => $idUrl,
-                'id_url_back'            => $idUrlBack, // ← ADDED
+                'id_url_back'            => $idUrlBack,
                 'place_of_birth'         => $user->place_of_birth,
                 'religion'               => $user->religion,
                 'email'                  => $user->email,
@@ -426,31 +414,35 @@ class AuthController extends Controller
         ], 200);
     }
 
+    /**
+     * Upload profile image to S3 and save the raw path to the user record.
+     * Returns the raw S3 path so the frontend can build the full worker URL.
+     */
     public function uploadProfileImage(Request $request)
     {
-        $user = $request->user();
-
-        if (!$user) {
-            return response()->json(['status' => 'failed', 'message' => 'Unauthenticated'], 401);
-        }
-
         $request->validate([
-            'profileImage' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:3048',
+            'profileImage' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
-        if ($request->hasFile('profileImage')) {
-            $path          = Storage::disk('s3')->putFile('profile_images', $request->file('profileImage'));
-            $user->url_photo = $path;
-            $user->save();
+        $user = auth()->user();
 
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Profile image uploaded successfully',
-                'data'    => ['url_photo' => $path],
-            ], 200);
+        // Delete old image from S3 if one exists
+        if ($user->url_photo) {
+            Storage::disk('s3')->delete($user->url_photo);
         }
 
-        return response()->json(['status' => 'failed', 'message' => 'No file uploaded'], 400);
+        // Store on S3 — putFile returns the full S3 key e.g. "profile-images/abc123.jpg"
+        $path = Storage::disk('s3')->putFile('profile-images', $request->file('profileImage'));
+
+        // Save the raw S3 path (NOT a full URL) so every endpoint is consistent
+        $user->url_photo = $path;
+        $user->save();
+
+        return response()->json([
+            'success'   => true,
+            'url_photo' => $path,   // raw path — frontend builds the full URL
+            'message'   => 'Profile image uploaded successfully',
+        ]);
     }
 
     public function login(Request $request)
@@ -477,6 +469,11 @@ class AuthController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Login successful'])->withCookie($cookie);
     }
 
+    /**
+     * Returns the authenticated user's full profile details.
+     * url_photo is returned as a RAW S3 path — the frontend builds the full worker URL.
+     * This prevents double-prefixing when the React component calls buildImageUrl().
+     */
     public function details(Request $request)
     {
         $user = $request->user();
@@ -487,9 +484,6 @@ class AuthController extends Controller
 
         $addressParts = array_filter([$user->house_block_lot_no, $user->street, $user->zone_purok]);
         $fullAddress  = implode(', ', $addressParts);
-
-        $workerBaseUrl = rtrim(env('R2_WORKER_URL', ''), '/');
-        $photoUrl      = $user->url_photo ? $workerBaseUrl . '/' . ltrim($user->url_photo, '/') : null;
 
         return response()->json([
             'status' => 'success',
@@ -505,7 +499,7 @@ class AuthController extends Controller
                 'marital_status'        => $user->marital_status,
                 'name_of_spouse'        => $user->name_of_spouse,
                 'date_of_birth'         => $user->date_of_birth,
-                'url_photo'             => $photoUrl,
+                'url_photo'             => $user->url_photo,   // RAW path — frontend builds full URL
                 'place_of_birth'        => $user->place_of_birth,
                 'religion'              => $user->religion,
                 'email'                 => $user->email,
@@ -554,7 +548,7 @@ class AuthController extends Controller
             'data'   => [
                 'id'          => $user->id,
                 'name'        => $fullName,
-                'url_photo'   => $user->url_photo,
+                'url_photo'   => $user->url_photo,   // raw path — caller builds full URL if needed
                 'role'        => $user->role ?? 'Staff',
                 'permissions' => $user->permissions ? json_decode($user->permissions) : [],
                 'status'      => $user->status,
@@ -577,9 +571,9 @@ class AuthController extends Controller
         }
 
         $user->update([
-            'email_verified_at'              => now(),
-            'email_verification_code'        => null,
-            'email_verification_expires_at'  => null,
+            'email_verified_at'             => now(),
+            'email_verification_code'       => null,
+            'email_verification_expires_at' => null,
         ]);
 
         return response()->json(['message' => 'Email verified successfully']);
@@ -683,8 +677,7 @@ class AuthController extends Controller
 
         if ($user) {
             $user->update(['status' => 'inactive']);
-            
-            // Guard against null token
+
             $token = $request->user()->currentAccessToken();
             if ($token) {
                 $token->delete();
@@ -694,4 +687,4 @@ class AuthController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Logged out successfully'])
             ->withCookie(cookie('auth_token', '', -1, '/', null, true, true, false, 'None'));
     }
-}
+}   
