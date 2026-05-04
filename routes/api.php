@@ -130,7 +130,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/schedules/available-slots', [ScheduleController::class, 'getAvailableSlots']);
     Route::get('/schedules/{document_number}', [ScheduleController::class, 'showByDocumentNumber']);
     Route::put('/schedules/{document_number}/reschedule', [ScheduleController::class, 'reschedule']);
-
+    Route::get('/verify-qr', [App\Http\Controllers\VerifyQrController::class, 'verify']);
     Route::prefix('documents')->group(function () {
         Route::get('{type}/{id}/replies', [DocumentReplyController::class, 'index']);
         Route::post('{type}/{id}/replies', [DocumentReplyController::class, 'store']);
