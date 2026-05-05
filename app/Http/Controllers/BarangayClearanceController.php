@@ -22,11 +22,11 @@ class BarangayClearanceController extends Controller
     public function index(Request $request)
     {
         // Auto-expire documents
-        BarangayClearance::where('status', 'RELEASED')
+         BarangayClearance::where('status', 'RELEASED')
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', Carbon::now())
             ->update(['status' => 'EXPIRED']);
-
+            
         $query = BarangayClearance::with('schedule');
 
         if ($request->filled('search')) {
@@ -77,9 +77,11 @@ class BarangayClearanceController extends Controller
         }
 
         if ($request->filled('schedule_filter')) {
-            $query->whereHas('schedule', function ($q) use ($request) {
-                $q->where('schedule_date', $request->schedule_filter);
-            });
+            if ($request->schedule_filter === 'scheduled') {
+                $query->whereHas('schedule');
+            } elseif ($request->schedule_filter === 'not_scheduled') {
+                $query->whereDoesntHave('schedule');
+            }
         }
 
         $sortField     = $request->get('sortField', 'created_at');
@@ -301,6 +303,7 @@ class BarangayClearanceController extends Controller
                 'PAID'       => ['label' => 'Paid',       'message' => 'Payment for your Barangay Clearance has been confirmed.'],
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
                 'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Clearance is currently being inspected.'],
+                'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Barangay Clearance has been archived.'],
             ];
 
             $statusInfo = $statusLabels[$status] ?? null;
@@ -345,7 +348,7 @@ class BarangayClearanceController extends Controller
     public function updateStatusClearance(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,DISABLED'
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED'
         ]);
 
         $record = BarangayClearance::findOrFail($id);
@@ -376,7 +379,7 @@ class BarangayClearanceController extends Controller
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment for your Barangay Clearance has been confirmed.'],
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Clearance is currently being inspected.'],
-            'DISABLED'   => ['label' => 'Disabled',   'message' => 'Your Barangay Clearance has been disabled.'],
+            'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Barangay Clearance has been archived.'],
         ];
 
         $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
@@ -411,7 +414,7 @@ class BarangayClearanceController extends Controller
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
-            'DISABLED' => 'disabled',
+            'ARCHIVED' => 'archived',
         ];
 
         $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
