@@ -84,14 +84,10 @@ class BarangayBusinessClearanceController extends Controller
         }
 
         if ($request->filled('schedule_filter')) {
-            if ($request->schedule_filter === 'has_schedule') {
-                $query->has('schedule');
-            } elseif ($request->schedule_filter === 'no_schedule') {
-                $query->doesntHave('schedule');
-            } else {
-                $query->whereHas('schedule', function ($q) use ($request) {
-                    $q->where('schedule_date', $request->schedule_filter);
-                });
+            if ($request->schedule_filter === 'scheduled') {
+                $query->whereHas('schedule');
+            } elseif ($request->schedule_filter === 'not_scheduled') {
+                $query->whereDoesntHave('schedule');
             }
         }
 
@@ -317,6 +313,7 @@ class BarangayBusinessClearanceController extends Controller
                 'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Business Clearance.'],
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Business Clearance is ready for payment.'],
                 'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Business Clearance is currently being inspected.'],
+                'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Business Clearance has been archived.'],
             ];
 
             $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -359,7 +356,7 @@ class BarangayBusinessClearanceController extends Controller
     public function updateStatusBusiness(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,DISABLED',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED',
         ]);
 
         $record = BarangayBusinessClearance::findOrFail($id);
@@ -399,7 +396,7 @@ class BarangayBusinessClearanceController extends Controller
                 'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Business Clearance.'],
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Business Clearance is ready for payment.'],
                 'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Business Clearance is currently being inspected.'],
-                'DISABLED'   => ['label' => 'Disabled',   'message' => 'Your Business Clearance has been disabled.'],
+                'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Business Clearance has been archived.'],
             ];
 
             $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -431,7 +428,7 @@ class BarangayBusinessClearanceController extends Controller
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
-            'DISABLED' => 'disabled',
+            'ARCHIVED' => 'archived',
         ];
 
         $ticketStatus = $ticketStatusMap[$newStatus] ?? null;

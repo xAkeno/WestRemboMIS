@@ -81,14 +81,10 @@ class BarangayBuildingClearanceController extends Controller
         }
 
         if ($request->filled('schedule_filter')) {
-            if ($request->schedule_filter === 'has_schedule') {
-                $query->has('schedule');
-            } elseif ($request->schedule_filter === 'no_schedule') {
-                $query->doesntHave('schedule');
-            } else {
-                $query->whereHas('schedule', function ($q) use ($request) {
-                    $q->where('schedule_date', $request->schedule_filter);
-                });
+            if ($request->schedule_filter === 'scheduled') {
+                $query->whereHas('schedule');
+            } elseif ($request->schedule_filter === 'not_scheduled') {
+                $query->whereDoesntHave('schedule');
             }
         }
 
@@ -326,7 +322,7 @@ class BarangayBuildingClearanceController extends Controller
     public function updateStatusBuilding(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,DISABLED',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED',
         ]);
 
         $record = BarangayBuildingClearance::findOrFail($id);
@@ -359,7 +355,7 @@ class BarangayBuildingClearanceController extends Controller
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Building Clearance.'],
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Building Clearance is ready for payment.'],
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Building Clearance is currently being inspected.'],
-            'DISABLED'   => ['label' => 'Disabled',   'message' => 'Your Building Clearance has been disabled.'],
+            'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Building Clearance has been archived.'],
         ];
 
         $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -388,7 +384,7 @@ class BarangayBuildingClearanceController extends Controller
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
-            'DISABLED' => 'disabled',
+            'ARCHIVED' => 'archived',
         ];
 
         $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
