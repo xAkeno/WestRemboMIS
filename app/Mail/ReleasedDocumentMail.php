@@ -30,14 +30,14 @@ class ReleasedDocumentMail extends Mailable
             view: 'emails.released_document',
             with: [
                 'name'     => trim($this->record->first_name . ' ' . $this->record->surname),
-                'filename' => $this->resolveFilename(), // 👈 add this
+                'filename' => $this->resolveFilename(),
+                'password' => $this->password, // 👈 now passed to the view
             ],
         );
     }
+
     private function resolveFilename(): string
     {
-        // Normalize the service type from the record
-        // Adjust the field name (service_type / document_type / type) to match your model
         $type = strtolower(
             $this->record->service_type
             ?? $this->record->document_type
@@ -59,7 +59,7 @@ class ReleasedDocumentMail extends Mailable
             }
         }
 
-        return 'barangaydocument.pdf'; // fallback
+        return 'barangaydocument.pdf';
     }
 
     public function attachments(): array

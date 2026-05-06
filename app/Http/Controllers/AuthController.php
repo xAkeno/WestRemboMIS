@@ -466,7 +466,7 @@ class AuthController extends Controller
 
         activity_log('User Logged In', 'login_attempt', 'Successful login', $user);
 
-        return response()->json(['status' => 'success', 'message' => 'Login successful'])->withCookie($cookie);
+        return response()->json(['status' => 'success', 'message' => 'Login successful',    'data' => $user  ])->withCookie($cookie);
     }
 
     /**

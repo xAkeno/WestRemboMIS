@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Mail;
 use App\Traits\ExtractsUserFromAuthToken;
 use App\Mail\ReleasedDocumentMail;
 use setasign\Fpdi\Tcpdf\Fpdi as TcpdfFpdi; // requires: composer require setasign/fpdi tecnickcom/tcpdf
-use App\Mail\DocumentPasswordMail;
+// use App\Mail\DocumentPasswordMail;
 class ReleaseDocumentController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -234,7 +234,7 @@ class ReleaseDocumentController extends Controller
             //   $password        → shown in the email body so recipient can open it
             if (!empty($record->email)) {
                 try {
-                    Mail::to($record->email)->send(new DocumentPasswordMail($record, $password));
+                    // Mail::to($record->email)->send(new DocumentPasswordMail($record, $password));
                     Mail::to($record->email)->send(new ReleasedDocumentMail($record, $encryptedTempPath, $password));
                 } catch (\Exception $mailError) {
                     Log::error("Email failed: " . $mailError->getMessage());
