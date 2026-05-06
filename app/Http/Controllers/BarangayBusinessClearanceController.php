@@ -84,14 +84,10 @@ class BarangayBusinessClearanceController extends Controller
         }
 
         if ($request->filled('schedule_filter')) {
-            if ($request->schedule_filter === 'has_schedule') {
-                $query->has('schedule');
-            } elseif ($request->schedule_filter === 'no_schedule') {
-                $query->doesntHave('schedule');
-            } else {
-                $query->whereHas('schedule', function ($q) use ($request) {
-                    $q->where('schedule_date', $request->schedule_filter);
-                });
+            if ($request->schedule_filter === 'scheduled') {
+                $query->whereHas('schedule');
+            } elseif ($request->schedule_filter === 'not_scheduled') {
+                $query->whereDoesntHave('schedule');
             }
         }
 
@@ -191,16 +187,21 @@ class BarangayBusinessClearanceController extends Controller
         DB::beginTransaction();
 
         try {
-            // ✅ Step 1: Lock rows FIRST (no aggregate)
+            $currentYear = date('Y');
+            $yearPrefix  = "BBC-{$currentYear}-";
+
+            // ✅ Step 1: Lock rows for the current year FIRST (no aggregate)
             DB::table('barangay_business_clearances')
+                ->where('brgy_business_no', 'LIKE', $yearPrefix . '%')
                 ->select('id')
                 ->orderByDesc('id')
                 ->limit(1)
                 ->lockForUpdate()
                 ->get();
 
-            // ✅ Step 2: Get MAX number safely
+            // ✅ Step 2: Get MAX number for the current year safely
             $lastNumber = DB::table('barangay_business_clearances')
+                ->where('brgy_business_no', 'LIKE', $yearPrefix . '%')
                 ->selectRaw("
                     COALESCE(
                         MAX(CAST(SUBSTRING(brgy_business_no FROM '[0-9]+$') AS INTEGER)),
@@ -210,8 +211,7 @@ class BarangayBusinessClearanceController extends Controller
                 ->value('max_num');
 
             $nextNumber = $lastNumber + 1;
-
-            $newRecord = 'BBUSINESS-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+            $newRecord  = $yearPrefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
 
             // ✅ Your original logic
             $data                     = $request->validated();
@@ -258,14 +258,22 @@ class BarangayBusinessClearanceController extends Controller
         }
     }
 
+
     public function latestRecord()
     {
-        $lastClearance = BarangayBusinessClearance::latest('created_at')->first();
-        $lastNumber    = $lastClearance ? intval(substr($lastClearance->brgy_business_no, 11)) : 0;
-        $newRecord     = 'BBUSINESS-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+        $currentYear = date('Y');
+
+        // Get the latest business clearance for the current year only
+        $lastClearance = BarangayBusinessClearance::where('brgy_business_no', 'LIKE', "BBC-{$currentYear}-%")
+            ->latest('created_at')
+            ->first();
+
+        // "BBC-YYYY-" is 9 characters, so substr at index 9 grabs just the number portion
+        $lastNumber = $lastClearance ? intval(substr($lastClearance->brgy_business_no, 9)) : 0;
+        $newRecord  = 'BBC-' . $currentYear . '-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
         $lastId = BarangayBusinessClearance::latest('id')->first();
-        $sum    = intval($lastId->id) + 1;
+        $sum    = $lastId ? intval($lastId->id) + 1 : 1;
 
         return response()->json([
             'status'  => 'success',
@@ -317,6 +325,7 @@ class BarangayBusinessClearanceController extends Controller
                 'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Business Clearance.'],
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Business Clearance is ready for payment.'],
                 'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Business Clearance is currently being inspected.'],
+                'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Business Clearance has been archived.'],
             ];
 
             $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -359,7 +368,7 @@ class BarangayBusinessClearanceController extends Controller
     public function updateStatusBusiness(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED',
         ]);
 
         $record = BarangayBusinessClearance::findOrFail($id);
@@ -399,6 +408,7 @@ class BarangayBusinessClearanceController extends Controller
                 'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Business Clearance.'],
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Business Clearance is ready for payment.'],
                 'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Business Clearance is currently being inspected.'],
+                'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Business Clearance has been archived.'],
             ];
 
             $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -430,6 +440,7 @@ class BarangayBusinessClearanceController extends Controller
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
+            'ARCHIVED' => 'archived',
         ];
 
         $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
@@ -511,6 +522,10 @@ class BarangayBusinessClearanceController extends Controller
             'INCOMPLETE' => [
                 'label' => 'Incomplete',
                 'message' => 'Your Barangay Certificate application is incomplete.'
+            ],
+            'DISABLED' => [
+                'label' => 'Disabled',
+                'message' => 'Your Barangay Certificate has been disabled.'
             ],
         ];
 

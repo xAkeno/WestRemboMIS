@@ -90,14 +90,10 @@ class BarangaCertificateController extends Controller
         }
 
         if ($request->filled('schedule_filter')) {
-            if ($request->schedule_filter === 'has_schedule') {
-                $query->has('schedule');
-            } elseif ($request->schedule_filter === 'no_schedule') {
-                $query->doesntHave('schedule');
-            } else {
-                $query->whereHas('schedule', function ($q) use ($request) {
-                    $q->where('schedule_date', $request->schedule_filter);
-                });
+            if ($request->schedule_filter === 'scheduled') {
+                $query->whereHas('schedule');
+            } elseif ($request->schedule_filter === 'not_scheduled') {
+                $query->whereDoesntHave('schedule');
             }
         }
 
@@ -320,7 +316,7 @@ class BarangaCertificateController extends Controller
     public function updateStatus(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED',
         ]);
 
         $record = BarangayCertificate::findOrFail($id);
@@ -353,6 +349,7 @@ class BarangaCertificateController extends Controller
             'PAID'       => ['label' => 'Paid',       'message' => 'Payment confirmed for your Barangay Certificate.'],
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Certificate is ready for payment.'],
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Certificate is currently being inspected.'],
+            'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Barangay Certificate has been archived.'],
         ];
 
         $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -382,6 +379,7 @@ class BarangaCertificateController extends Controller
             'PENDING'  => 'pending',
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
+            'ARCHIVED' => 'archived',
         ];
 
         $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
@@ -425,7 +423,7 @@ class BarangaCertificateController extends Controller
             'data'    => null,
         ]);
     }
-
+//////// this is now updated
     public function setDisposition(Request $request, $id)
     {
         $validated = $request->validate([
@@ -450,6 +448,10 @@ class BarangaCertificateController extends Controller
             'INCOMPLETE' => [
                 'label' => 'Incomplete',
                 'message' => 'Your Barangay Certificate application is incomplete.'
+            ],
+            'ARCHIVED' => [
+                'label' => 'Archived',
+                'message' => 'Your Barangay Certificate has been archived.'
             ],
         ];
 
