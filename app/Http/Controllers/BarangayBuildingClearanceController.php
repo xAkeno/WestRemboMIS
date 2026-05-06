@@ -184,16 +184,21 @@ class BarangayBuildingClearanceController extends Controller
         DB::beginTransaction();
 
         try {
-            // ✅ Step 1: Lock the table rows (no aggregate here)
+            $currentYear = date('Y');
+            $yearPrefix  = "BDC-{$currentYear}-";
+
+            // ✅ Step 1: Lock rows for the current year FIRST (no aggregate)
             DB::table('barangay_building_clearances')
+                ->where('bcert_number', 'LIKE', $yearPrefix . '%')
                 ->select('id')
                 ->orderByDesc('id')
                 ->limit(1)
                 ->lockForUpdate()
                 ->get();
 
-            // ✅ Step 2: Now safely compute MAX (no lock here)
+            // ✅ Step 2: Get MAX number for the current year safely
             $lastNumber = DB::table('barangay_building_clearances')
+                ->where('bcert_number', 'LIKE', $yearPrefix . '%')
                 ->selectRaw("
                     COALESCE(
                         MAX(CAST(SUBSTRING(bcert_number FROM '[0-9]+$') AS INTEGER)),
@@ -203,8 +208,7 @@ class BarangayBuildingClearanceController extends Controller
                 ->value('max_num');
 
             $nextNumber = $lastNumber + 1;
-
-            $newRecord = 'BBUILDINGCLE-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+            $newRecord  = $yearPrefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
 
             // ✅ Your original logic
             $data                 = $request->validated();
@@ -251,14 +255,22 @@ class BarangayBuildingClearanceController extends Controller
         }
     }
 
+
     public function latestRecord()
     {
-        $lastClearance = BarangayBuildingClearance::latest('created_at')->first();
-        $lastNumber    = $lastClearance ? intval(substr($lastClearance->bcert_number, 13)) : 0;
-        $newRecord     = 'BBUILDINGCLE-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+        $currentYear = date('Y');
+
+        // Get the latest building clearance for the current year only
+        $lastClearance = BarangayBuildingClearance::where('bcert_number', 'LIKE', "BDC-{$currentYear}-%")
+            ->latest('created_at')
+            ->first();
+
+        // "BDC-YYYY-" is 9 characters, so substr at index 9 grabs just the number portion
+        $lastNumber = $lastClearance ? intval(substr($lastClearance->bcert_number, 9)) : 0;
+        $newRecord  = 'BDC-' . $currentYear . '-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
 
         $lastId = BarangayBuildingClearance::latest('id')->first();
-        $sum    = intval($lastId->id) + 1;
+        $sum    = $lastId ? intval($lastId->id) + 1 : 1;
 
         return response()->json([
             'status'  => 'success',
