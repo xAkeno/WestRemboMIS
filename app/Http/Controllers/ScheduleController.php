@@ -81,7 +81,6 @@ class ScheduleController extends Controller
 
         $group = $request->time_group;
 
-        // ✅ Count how many already in that group
         $count = Schedule::where('document_type', $request->document_type)
             ->where('schedule_date', $request->schedule_date)
             ->get()
@@ -95,7 +94,6 @@ class ScheduleController extends Controller
             ], 422);
         }
 
-        // ✅ Auto assign time
         $time = $this->generateTime($group, $count);
 
         $schedule = Schedule::create([
@@ -106,14 +104,12 @@ class ScheduleController extends Controller
             'schedule_time'   => $time,
         ]);
 
-        // 🎟️ Create ticket
         $ticket = $this->ticketService->createTicketForSchedule(
             $schedule,
             $request->document_type,
             $userId
         );
 
-        // 📝 Update document status
         $this->updateDocumentStatus(
             $request->document_type,
             $request->document_number,
@@ -129,9 +125,65 @@ class ScheduleController extends Controller
             ]
         ], 201);
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | 🔴 MARK NO SHOW
+    | Called automatically when the user opens a missed schedule.
+    | Sets document status to NO_SHOW so staff can see who didn't appear.
+    |--------------------------------------------------------------------------
+    */
+    public function markNoShow(string $documentType, string $id): JsonResponse
+    {
+        $schedule = Schedule::where('id', $id)
+            ->where('document_type', $documentType)
+            ->first();
+
+        if (!$schedule) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Schedule not found.',
+            ], 404);
+        }
+
+        $today    = now()->startOfDay();
+        $schedDay = \Carbon\Carbon::parse($schedule->schedule_date)->startOfDay();
+
+        if ($schedDay >= $today) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Schedule has not passed yet.',
+            ], 422);
+        }
+
+        $currentStatus = $this->getCurrentDocumentStatus(
+            $schedule->document_type,
+            $schedule->document_number
+        );
+
+        if (in_array(strtolower($currentStatus ?? ''), ['no_show', 'rescheduled'])) {
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Status already updated.',
+            ]);
+        }
+
+        $this->updateDocumentStatus(
+            $schedule->document_type,
+            $schedule->document_number,
+            'NO_SHOW'
+        );
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Marked as no show.',
+        ]);
+    }
+
     /*
     |--------------------------------------------------------------------------
     | 🟢 RESCHEDULE
+    | When user picks a new date after missing, status goes to RESCHEDULED.
     |--------------------------------------------------------------------------
     */
     public function reschedule(Request $request, string $documentNumber): JsonResponse
@@ -174,6 +226,8 @@ class ScheduleController extends Controller
             'schedule_time' => $time,
         ]);
 
+        // Always set to RESCHEDULED regardless of previous status
+        // (covers both NO_SHOW → RESCHEDULED and SCHEDULED → RESCHEDULED)
         $this->updateDocumentStatus(
             $schedule->document_type,
             $documentNumber,
@@ -181,10 +235,26 @@ class ScheduleController extends Controller
         );
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => 'Schedule updated successfully.',
-            'data' => $schedule,
+            'data'    => $schedule,
         ]);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | 🟢 SHOW BY DOCUMENT NUMBER
+    |--------------------------------------------------------------------------
+    */
+    public function showByDocumentNumber(string $documentNumber)
+    {
+        $schedule = Schedule::where('document_number', $documentNumber)->first();
+
+        if (!$schedule) {
+            return response()->json(['message' => 'Schedule not found'], 404);
+        }
+
+        return response()->json(['status' => 'success', 'data' => $schedule]);
     }
 
     /*
@@ -201,38 +271,24 @@ class ScheduleController extends Controller
 
     private function generateTime(string $group, int $index): string
     {
-        // Spread evenly every 10 mins
-
         if ($group === 'morning') {
-            // 08:00 - 11:50
-            $hour = 8 + floor($index / 6);
+            $hour   = 8 + floor($index / 6);
             $minute = ($index % 6) * 10;
         } else {
-            // 13:00 - 17:50
-            $hour = 13 + floor($index / 6);
+            $hour   = 13 + floor($index / 6);
             $minute = ($index % 6) * 10;
         }
 
         return sprintf('%02d:%02d', $hour, $minute);
     }
-    public function showByDocumentNumber(string $documentNumber)
-    {
-        $schedule = Schedule::where('document_number', $documentNumber)->first();
-        
-        if (!$schedule) {
-            return response()->json(['message' => 'Schedule not found'], 404);
-        }
-        
-        return response()->json(['status' => 'success', 'data' => $schedule]);
-    }
 
     private function updateDocumentStatus(string $documentType, string $documentNumber, string $status): void
     {
         $map = [
-            'barangay_clearance'    => [\App\Models\BarangayClearance::class, 'bcert_number'],
-            'barangay_certificate'  => [\App\Models\BarangayCertificate::class, 'bcert_number'],
-            'business_clearance'    => [\App\Models\BarangayBusinessClearance::class, 'brgy_business_no'],
-            'building_clearance'    => [\App\Models\BarangayBuildingClearance::class, 'bcert_number'],
+            'barangay_clearance'    => [\App\Models\BarangayClearance::class,         'bcert_number'],
+            'barangay_certificate'  => [\App\Models\BarangayCertificate::class,        'bcert_number'],
+            'business_clearance'    => [\App\Models\BarangayBusinessClearance::class,  'brgy_business_no'],
+            'building_clearance'    => [\App\Models\BarangayBuildingClearance::class,  'bcert_number'],
         ];
 
         if (!isset($map[$documentType])) return;
@@ -241,5 +297,26 @@ class ScheduleController extends Controller
 
         $model::where($column, $documentNumber)
             ->update(['status' => $status]);
+    }
+
+    /**
+     * Read the current status of the document so we can avoid double-marking.
+     */
+    private function getCurrentDocumentStatus(string $documentType, string $documentNumber): ?string
+    {
+        $map = [
+            'barangay_clearance'    => [\App\Models\BarangayClearance::class,         'bcert_number'],
+            'barangay_certificate'  => [\App\Models\BarangayCertificate::class,        'bcert_number'],
+            'business_clearance'    => [\App\Models\BarangayBusinessClearance::class,  'brgy_business_no'],
+            'building_clearance'    => [\App\Models\BarangayBuildingClearance::class,  'bcert_number'],
+        ];
+
+        if (!isset($map[$documentType])) return null;
+
+        [$model, $column] = $map[$documentType];
+
+        $record = $model::where($column, $documentNumber)->first();
+
+        return $record?->status;
     }
 }

@@ -125,21 +125,24 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('documents/release/{documentType}/{id}/download', [ReleaseDocumentController::class, 'download']);
     Route::post('documents/verify', [ReleaseDocumentController::class, 'verify']);
 
+    Route::post('/schedules/{documentType}/{id}/no-show', [ScheduleController::class, 'markNoShow']);
+    Route::get('/schedules/available-slots', [ScheduleController::class, 'getAvailableSlots']);
     Route::get('/schedules', [ScheduleController::class, 'index']);
     Route::post('/schedules', [ScheduleController::class, 'store']);
-    Route::get('/schedules/available-slots', [ScheduleController::class, 'getAvailableSlots']);
     Route::get('/schedules/{document_number}', [ScheduleController::class, 'showByDocumentNumber']);
     Route::put('/schedules/{document_number}/reschedule', [ScheduleController::class, 'reschedule']);
+
+    Route::get('/documents/pending', [ScheduleController::class, 'getPendingDocuments']);
+
     Route::get('/verify-qr', [App\Http\Controllers\VerifyQrController::class, 'verify']);
     Route::prefix('documents')->group(function () {
         Route::get('{type}/{id}/replies', [DocumentReplyController::class, 'index']);
         Route::post('{type}/{id}/replies', [DocumentReplyController::class, 'store']);
     });
-    Route::put('/schedules/{documentNumber}/reschedule', [ScheduleController::class, 'reschedule']);
-    Route::get('/schedules/{document_number}', [ScheduleController::class, 'showByDocumentNumber']);
 
-    Route::get('/documents/pending', [ScheduleController::class, 'getPendingDocuments']);
 
+    // routes/api.php
+    // Route::post('schedules/{documentType}/{id}/no-show', [ScheduleController::class, 'markNoShow']);
     Route::get('/contacts', [ContactController::class, 'index']);
     Route::patch('/contacts/{id}/status', [ContactController::class, 'updateStatus']);
     Route::post('/contacts/{id}/reply', [ContactController::class, 'reply']);
