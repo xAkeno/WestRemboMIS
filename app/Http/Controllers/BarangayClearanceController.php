@@ -176,95 +176,107 @@ class BarangayClearanceController extends Controller
      * Store a newly created resource in storage.
      */
     public function store(StoreBarangayClearanceRequest $request)
-    {
-        DB::beginTransaction();
+{
+    DB::beginTransaction();
 
-        try {
-            // ✅ Step 1: Lock rows FIRST (no aggregate)
-            DB::table('barangay_clearances')
-                ->select('id')
-                ->orderByDesc('id')
-                ->limit(1)
-                ->lockForUpdate()
-                ->get();
+    try {
+        $currentYear = date('Y');
+        $yearPrefix  = "BC-{$currentYear}-";
 
-            // ✅ Step 2: Get MAX safely
-            $lastNumber = DB::table('barangay_clearances')
-                ->selectRaw("
-                    COALESCE(
-                        MAX(CAST(SUBSTRING(bcert_number FROM '[0-9]+$') AS INTEGER)),
-                        0
-                    ) as max_num
-                ")
-                ->value('max_num');
+        // ✅ Step 1: Lock rows for the current year FIRST (no aggregate)
+        DB::table('barangay_clearances')
+            ->where('bcert_number', 'LIKE', $yearPrefix . '%')
+            ->select('id')
+            ->orderByDesc('id')
+            ->limit(1)
+            ->lockForUpdate()
+            ->get();
 
-            $nextNumber = $lastNumber + 1;
+        // ✅ Step 2: Get MAX number for the current year safely
+        $lastNumber = DB::table('barangay_clearances')
+            ->where('bcert_number', 'LIKE', $yearPrefix . '%')
+            ->selectRaw("
+                COALESCE(
+                    MAX(CAST(SUBSTRING(bcert_number FROM '[0-9]+$') AS INTEGER)),
+                    0
+                ) as max_num
+            ")
+            ->value('max_num');
 
-            $newRecord = 'BCLEAR-' . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
+        $nextNumber = $lastNumber + 1;
+        $newRecord  = $yearPrefix . str_pad($nextNumber, 3, '0', STR_PAD_LEFT);
 
-            // ✅ Your original logic
-            $data                 = $request->validated();
-            $data['bcert_number'] = $newRecord;
-            $data['status']       = 'ENCODED';
-            $data['created_by']   = $this->getUserIdFromAuthToken();
-            $data['updated_by']   = $this->getUserIdFromAuthToken();
+        // ✅ Your original logic
+        $data                 = $request->validated();
+        $data['bcert_number'] = $newRecord;
+        $data['status']       = 'ENCODED';
+        $data['created_by']   = $this->getUserIdFromAuthToken();
+        $data['updated_by']   = $this->getUserIdFromAuthToken();
 
-            $clearance = BarangayClearance::create($data);
+        $clearance = BarangayClearance::create($data);
 
-            activity_log(
-                'Barangay Clearance Created',
-                'create',
-                'Created #: ' . $clearance->bcert_number
-            );
+        activity_log(
+            'Barangay Clearance Created',
+            'create',
+            'Created #: ' . $clearance->bcert_number
+        );
 
-            // ✅ Kiosk matching (unchanged)
-            $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
-                ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
-                ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
-                ->first();
+        // ✅ Kiosk matching (unchanged)
+        $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
+            ->whereRaw('LOWER(first_name) = ?', [strtolower($data['first_name'])])
+            ->whereRaw('LOWER(surname)    = ?', [strtolower($data['surname'])])
+            ->first();
 
-            if ($kiosk) {
-                Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
-                    ->where('serviceable_id', $kiosk->id)
-                    ->whereIn('status', ['pending', 'waiting', 'Pending'])
-                    ->update(['status' => 'called']);
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'status'  => 'success',
-                'message' => 'Barangay clearance created successfully',
-                'data'    => [
-                    'service' => $clearance,
-                    'ticket'  => null
-                ],
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            throw $e;
+        if ($kiosk) {
+            Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                ->where('serviceable_id', $kiosk->id)
+                ->whereIn('status', ['pending', 'waiting', 'Pending'])
+                ->update(['status' => 'called']);
         }
-    }
 
-    public function latestRecord()
-    {
-        $lastClearance = BarangayClearance::latest('created_at')->first();
-        $lastNumber    = $lastClearance ? intval(substr($lastClearance->bcert_number, 8)) : 0;
-        $newRecord     = 'BCLEAR-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
-
-        $lastId = BarangayClearance::latest('id')->first();
-        $sum    = intval($lastId->id) + 1;
+        DB::commit();
 
         return response()->json([
             'status'  => 'success',
-            'message' => 'Successfully get the latest',
+            'message' => 'Barangay clearance created successfully',
             'data'    => [
-                'nextRecord' => $newRecord,
-                'nextId'     => $sum,
+                'service' => $clearance,
+                'ticket'  => null
             ],
-        ], 200);
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        throw $e;
     }
+}
+
+    public function latestRecord()
+{
+    $currentYear = date('Y');
+
+    // Get the latest clearance for the current year only
+    $lastClearance = BarangayClearance::where('bcert_number', 'LIKE', "BC-{$currentYear}-%")
+        ->latest('created_at')
+        ->first();
+
+    // "BC-YYYY-" is 8 characters, so substr at index 8 grabs just the number portion
+    $lastNumber = $lastClearance ? intval(substr($lastClearance->bcert_number, 8)) : 0;
+    $newRecord  = 'BC-' . $currentYear . '-' . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
+
+    $lastId = BarangayClearance::latest('id')->first();
+    $sum    = $lastId ? intval($lastId->id) + 1 : 1;
+
+    return response()->json([
+        'status'  => 'success',
+        'message' => 'Successfully get the latest',
+        'data'    => [
+            'nextRecord' => $newRecord,
+            'nextId'     => $sum,
+        ],
+    ], 200);
+}
+
 
     /**
      * Display the specified resource.
