@@ -317,6 +317,7 @@ class BarangayClearanceController extends Controller
                 'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Clearance is currently being inspected.'],
                 'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Barangay Clearance has been archived.'],
                 'PROCESS'    => ['label' => 'In Process', 'message' => 'Your Barangay Clearance is currently in process.'],
+                'REVIEW'     => ['label' => 'Review', 'message' => 'Your Barangay Clearance is currently under review.'],
             ];
 
             $statusInfo = $statusLabels[$status] ?? null;
@@ -361,7 +362,7 @@ class BarangayClearanceController extends Controller
     public function updateStatusClearance(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED,PROCESS'
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED,PROCESS,REVIEW'
         ]);
 
         $record = BarangayClearance::findOrFail($id);
@@ -394,6 +395,7 @@ class BarangayClearanceController extends Controller
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Clearance is currently being inspected.'],
             'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Barangay Clearance has been archived.'],
             'PROCESS'    => ['label' => 'In Process', 'message' => 'Your Barangay Clearance is currently in process.'],
+            'REVIEW'     => ['label' => 'Review',     'message' => 'Your Barangay Clearance is currently under review.'],
         ];
 
         $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
@@ -430,6 +432,7 @@ class BarangayClearanceController extends Controller
             'RELEASED' => 'released',
             'ARCHIVED' => 'archived',
             'PROCESS'  => 'process',
+            'REVIEW'   => 'review',
         ];
 
         $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
