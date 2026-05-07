@@ -366,22 +366,46 @@ class BarangayClearanceController extends Controller
         ]);
 
         $record = BarangayClearance::findOrFail($id);
+        
+        $oldStatus = $record->status;
+        $newStatus = strtoupper($validated['status']);
 
-        $status = strtoupper($validated['status']);
-
-        if ($status === 'PAID') {
-            $record->issued_date = now();
-            $record->issued_at   = 'Barangay Hall';
-            $record->issued_on   = now();  // ✅ ADD THIS
+        // ✅ IMPORTANT: Allow restoring from ARCHIVED to any valid status
+        // If the record is ARCHIVED and trying to change to a non-ARCHIVED status, allow it
+        if ($oldStatus === 'ARCHIVED' && $newStatus !== 'ARCHIVED') {
+            // This is a restore operation - allow it
+            $record->status = $newStatus;
+            $record->save();
+            
+            // Add a log entry for the restore
+            activity_log(
+                'Barangay Clearance Restored',
+                'restore',
+                'Restored from ARCHIVED to ' . $newStatus . ' (#: ' . $record->bcert_number . ')'
+            );
+            
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Barangay clearance restored successfully',
+                'data' => $record->fresh(),
+            ]);
         }
 
-        if ($status === 'RELEASED') {
+        // Normal status update logic for non-archived records
+        if ($newStatus === 'PAID') {
+            $record->issued_date = now();
+            $record->issued_at   = 'Barangay Hall';
+            $record->issued_on   = now();
+        }
+
+        if ($newStatus === 'RELEASED') {
             $record->issued_date = $record->issued_date ?? now();
             $record->issued_at   = $record->issued_at ?? 'Barangay Hall';
-            $record->issued_on   = $record->issued_on ?? now();  // ✅ ADD THIS
+            $record->issued_on   = $record->issued_on ?? now();
             $record->expires_at  = now()->addMonths(6);
         }
 
+        // If archiving, just update the status
         $statusLabels = [
             'PENDING'    => ['label' => 'Pending',    'message' => 'Your Barangay Clearance application is now pending review.'],
             'ENCODED'    => ['label' => 'Encoded',    'message' => 'Your Barangay Clearance application has been encoded into the system.'],
@@ -398,10 +422,9 @@ class BarangayClearanceController extends Controller
             'REVIEW'     => ['label' => 'Review',     'message' => 'Your Barangay Clearance is currently under review.'],
         ];
 
-        $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
+        $statusInfo = $statusLabels[$newStatus] ?? null;
 
         if ($statusInfo) {
-
             $user = \App\Models\User::whereRaw(
                     'LOWER(first_name) = ?',
                     [strtolower($record->first_name)]
@@ -423,7 +446,7 @@ class BarangayClearanceController extends Controller
             }
         }
 
-        $record->status = strtoupper($validated['status']);
+        $record->status = $newStatus;
         $record->save();
 
         $ticketStatusMap = [
@@ -435,10 +458,9 @@ class BarangayClearanceController extends Controller
             'REVIEW'   => 'review',
         ];
 
-        $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;
+        $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
 
         if ($ticketStatus) {
-
             $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
                 ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
                 ->whereRaw('LOWER(surname) = ?', [strtolower($record->surname)])
@@ -451,15 +473,16 @@ class BarangayClearanceController extends Controller
             }
         }
 
+        $action = $oldStatus === 'ARCHIVED' ? 'Restored' : 'Status Updated';
         activity_log(
-            'Barangay Clearance Status Updated',
+            'Barangay Clearance ' . $action,
             'status_update',
-            'Changed to ' . $validated['status'] . ' (#: ' . $record->bcert_number . ')'
+            'Changed from ' . $oldStatus . ' to ' . $newStatus . ' (#: ' . $record->bcert_number . ')'
         );
 
         return response()->json([
             'status'  => 'success',
-            'message' => 'Barangay clearance status updated',
+            'message' => 'Barangay clearance ' . ($oldStatus === 'ARCHIVED' ? 'restored' : 'status updated') . ' successfully',
             'data'    => $record,
         ]);
     }
