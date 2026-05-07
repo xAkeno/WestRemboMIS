@@ -314,29 +314,53 @@ class ReleaseDocumentController extends Controller
     {
         try {
             $request->validate(['file' => 'required|file|mimes:pdf']);
-
+    
             $hash = hash('sha256', file_get_contents($request->file('file')->getRealPath()));
-
-            foreach (self::MODEL_MAP as $modelClass) {
+    
+            foreach (self::MODEL_MAP as $documentType => $modelClass) {
+    
+                // ── Check released hash (encrypted PDF) ──────────────────────────
                 $record = $modelClass::where('document_hash', $hash)->first();
-
+                $source = 'released';
+    
+                // ── Check downloaded hash (plain PDF) ────────────────────────────
+                if (!$record) {
+                    $record = $modelClass::where('downloaded_document_hash', $hash)->first();
+                    $source = 'downloaded';
+                }
+    
                 if ($record) {
                     $maskedName =
-                        strtoupper(substr($record->first_name, 0, 1)) . '*** ' .
-                        strtoupper(substr($record->surname, 0, 1)) . '***';
-
-                    $issuedDate = $record->issued_date;
-                    $expiresAt  = $issuedDate
-                        ? \Carbon\Carbon::parse($issuedDate)->addYear()
-                        : null;
-
+                        strtoupper(substr($record->first_name ?? '?', 0, 1)) . '*** ' .
+                        strtoupper(substr($record->surname    ?? '?', 0, 1)) . '***';
+    
+                    // Use the right date/expiry depending on source
+                    if ($source === 'released') {
+                        $issuedDate = $record->issued_date;
+                        $expiresAt  = $issuedDate
+                            ? \Carbon\Carbon::parse($issuedDate)->addYear()
+                            : null;
+                        $cid        = $record->ipfs_cid;
+                    } else {
+                        // Downloaded docs: use downloaded_at as the reference date
+                        $issuedDate = $record->downloaded_at
+                            ? \Carbon\Carbon::parse($record->downloaded_at)->toDateString()
+                            : null;
+                        // Downloaded docs expire 6 months after download
+                        $expiresAt  = $issuedDate
+                            ? \Carbon\Carbon::parse($issuedDate)->addMonths(6)
+                            : null;
+                        $cid        = $record->downloaded_ipfs_cid;
+                    }
+    
                     return response()->json([
                         'valid'   => true,
                         'message' => 'Document is authentic',
                         'data'    => [
-                            'cid'         => $record->ipfs_cid,
+                            'cid'         => $cid,
                             'record_id'   => $record->id,
-                            'type'        => $modelClass,
+                            'type'        => $documentType,
+                            'source'      => $source,   // 'released' or 'downloaded'
                             'name'        => $maskedName,
                             'issued_date' => $issuedDate,
                             'expires_at'  => $expiresAt,
@@ -345,11 +369,17 @@ class ReleaseDocumentController extends Controller
                     ]);
                 }
             }
-
-            return response()->json(['valid' => false, 'message' => 'Document is NOT authentic']);
-
+    
+            return response()->json([
+                'valid'   => false,
+                'message' => 'Document is NOT authentic',
+            ]);
+    
         } catch (\Exception $e) {
-            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage(),
+            ], 500);
         }
     }
 
