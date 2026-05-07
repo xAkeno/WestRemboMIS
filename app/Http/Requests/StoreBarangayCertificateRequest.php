@@ -35,7 +35,7 @@
                 'verification_file' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
                 'or_no' => 'nullable|string|max:100',
                 'rejection_reason' => 'nullable|string|max:1000',
-                'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING,INSPECTING,NO_SHOW',  
+                'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING,INSPECTING,ARCHIVED,NO_SHOW,PROCESS,REVIEW',  
             ];
         }
 

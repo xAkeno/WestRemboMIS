@@ -327,6 +327,7 @@ class BarangayBusinessClearanceController extends Controller
                 'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Business Clearance is currently being inspected.'],
                 'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Business Clearance has been archived.'],
                 'PROCESS'    => ['label' => 'In Process', 'message' => 'Your Business Clearance is currently in process.'],
+                'REVIEW'     => ['label' => 'Review',     'message' => 'Your Business Clearance is currently under review.'],
             ];
 
             $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -369,7 +370,7 @@ class BarangayBusinessClearanceController extends Controller
     public function updateStatusBusiness(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED,PROCESS',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED,PROCESS,REVIEW',
         ]);
 
         $record = BarangayBusinessClearance::findOrFail($id);
@@ -411,6 +412,7 @@ class BarangayBusinessClearanceController extends Controller
                 'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Business Clearance is currently being inspected.'],
                 'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Business Clearance has been archived.'],
                 'PROCESS'    => ['label' => 'In Process', 'message' => 'Your Business Clearance is currently in process.'],
+                'REVIEW'     => ['label' => 'Review',     'message' => 'Your Business Clearance is currently under review.'],
             ];
 
             $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -444,6 +446,7 @@ class BarangayBusinessClearanceController extends Controller
             'RELEASED' => 'released',
             'ARCHIVED' => 'archived',
             'PROCESS'  => 'process',
+            'REVIEW'   => 'review',
         ];
 
         $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
