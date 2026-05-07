@@ -316,6 +316,7 @@ class BarangayClearanceController extends Controller
                 'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
                 'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Clearance is currently being inspected.'],
                 'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Barangay Clearance has been archived.'],
+                'PROCESS'    => ['label' => 'In Process', 'message' => 'Your Barangay Clearance is currently in process.'],
             ];
 
             $statusInfo = $statusLabels[$status] ?? null;
@@ -360,7 +361,7 @@ class BarangayClearanceController extends Controller
     public function updateStatusClearance(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED'
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED,PROCESS'
         ]);
 
         $record = BarangayClearance::findOrFail($id);
@@ -392,6 +393,7 @@ class BarangayClearanceController extends Controller
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Clearance is ready for payment. Please proceed to the cashier.'],
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Clearance is currently being inspected.'],
             'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Barangay Clearance has been archived.'],
+            'PROCESS'    => ['label' => 'In Process', 'message' => 'Your Barangay Clearance is currently in process.'],
         ];
 
         $statusInfo = $statusLabels[strtoupper($validated['status'])] ?? null;
@@ -427,6 +429,7 @@ class BarangayClearanceController extends Controller
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
             'ARCHIVED' => 'archived',
+            'PROCESS'  => 'process',
         ];
 
         $ticketStatus = $ticketStatusMap[strtoupper($validated['status'])] ?? null;

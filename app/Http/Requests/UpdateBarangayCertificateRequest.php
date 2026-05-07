@@ -35,7 +35,7 @@
                 'or_no' => 'sometimes|nullable|string|max:100',
                 'for_the_punong_barangay' => 'sometimes|nullable|string|max:100',
                 'rejection_reason' => 'nullable|string|max:1000',
-                'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING,INSPECTING,ARCHIVED,NO_SHOW',   
+                'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING,INSPECTING,ARCHIVED,NO_SHOW,PROCESS',   
             ];
         }
     };

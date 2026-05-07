@@ -334,7 +334,7 @@ class BarangayBuildingClearanceController extends Controller
     public function updateStatusBuilding(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED,PROCESS',
         ]);
 
         $record = BarangayBuildingClearance::findOrFail($id);
@@ -368,6 +368,7 @@ class BarangayBuildingClearanceController extends Controller
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Building Clearance is ready for payment.'],
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Building Clearance is currently being inspected.'],
             'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Building Clearance has been archived.'],
+            'PROCESS'    => ['label' => 'In Process', 'message' => 'Your Building Clearance is currently in process.'],
         ];
 
         $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -397,6 +398,7 @@ class BarangayBuildingClearanceController extends Controller
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
             'ARCHIVED' => 'archived',
+            'PROCESS'  => 'process',
         ];
 
         $ticketStatus = $ticketStatusMap[$newStatus] ?? null;

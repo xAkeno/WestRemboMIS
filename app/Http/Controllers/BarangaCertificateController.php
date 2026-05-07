@@ -316,7 +316,7 @@ class BarangaCertificateController extends Controller
     public function updateStatus(Request $request, $id)
     {
         $validated = $request->validate([
-            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED',
+            'status' => 'required|in:PENDING,ENCODED,INCOMPLETE,REJECTED,RELEASED,SCHEDULED,EXPIRED,PAID,TO_PAY,INSPECTING,ARCHIVED,PROCESS',
         ]);
 
         $record = BarangayCertificate::findOrFail($id);
@@ -350,6 +350,7 @@ class BarangaCertificateController extends Controller
             'TO_PAY'     => ['label' => 'For Payment','message' => 'Your Barangay Certificate is ready for payment.'],
             'INSPECTING' => ['label' => 'Inspecting', 'message' => 'Your Barangay Certificate is currently being inspected.'],
             'ARCHIVED'   => ['label' => 'Archived',   'message' => 'Your Barangay Certificate has been archived.'],
+            'PROCESS'    => ['label' => 'In Process',    'message' => 'Your Barangay Certificate is currently in process.'],
         ];
 
         $statusInfo = $statusLabels[$newStatus] ?? null;
@@ -380,6 +381,7 @@ class BarangaCertificateController extends Controller
             'ENCODED'  => 'called',
             'RELEASED' => 'released',
             'ARCHIVED' => 'archived',
+            'PROCESS'  => 'process',
         ];
 
         $ticketStatus = $ticketStatusMap[$newStatus] ?? null;
@@ -452,6 +454,10 @@ class BarangaCertificateController extends Controller
             'ARCHIVED' => [
                 'label' => 'Archived',
                 'message' => 'Your Barangay Certificate has been archived.'
+            ],
+            'PROCESS' => [
+                'label' => 'In Process',
+                'message' => 'Your Barangay Certificate is currently in process.'
             ],
         ];
 
