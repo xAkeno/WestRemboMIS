@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use App\Traits\ExtractsUserFromAuthToken;
 use App\Mail\ReleasedDocumentMail;
-use setasign\Fpdi\Tcpdf\Fpdi as TcpdfFpdi; // requires: composer require setasign/fpdi tecnickcom/tcpdf
-// use App\Mail\DocumentPasswordMail;
+use setasign\Fpdi\Tcpdf\Fpdi as TcpdfFpdi;
+
 class ReleaseDocumentController extends Controller
 {
     use ExtractsUserFromAuthToken;
@@ -23,31 +23,10 @@ class ReleaseDocumentController extends Controller
         'business-clearances'   => \App\Models\BarangayBusinessClearance::class,
     ];
 
-    /**
-     * Generate password: strlen(firstname) + lastname + age
-     *
-     * Example: firstname="Juan" (4 chars), lastname="Cruz", age=25
-     * Result  => "4Cruz25"
-     */
     private function generatePassword(string $firstName, string $lastName, int $age): string
     {
         return strlen(trim($firstName)) . trim($lastName) . $age;
     }
-
-    /**
-     * Encrypt a PDF using TCPDF + FPDI — pure PHP, works on Windows.
-     *
-     * Reads the original PDF page-by-page with FPDI, then applies
-     * TCPDF's AES-256 SetProtection before saving to a temp file.
-     *
-     * Composer deps needed:
-     *   composer require tecnickcom/tcpdf setasign/fpdi
-     *
-     * @param  string $inputPath  Absolute path to the original (unencrypted) PDF
-     * @param  string $password   User password (what the recipient types to open)
-     * @return string             Absolute path to the encrypted temp PDF
-     * @throws \Exception
-     */
 
     private function normalizePdf(string $inputPath): string
     {
@@ -60,9 +39,8 @@ class ReleaseDocumentController extends Controller
         $cmd = "$gsBinary -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dNOPAUSE -dBATCH -sOutputFile=\"$outputPath\" \"$inputPath\" 2>&1";
         exec($cmd, $output, $returnVar);
 
-        // 👇 LOG EVERYTHING
-        \Log::error('Ghostscript output:', $output);
-        \Log::error('Ghostscript return code: ' . $returnVar);
+        Log::error('Ghostscript output:', $output);
+        Log::error('Ghostscript return code: ' . $returnVar);
 
         if ($returnVar !== 0 || !file_exists($outputPath)) {
             throw new \Exception('Ghostscript failed: ' . implode("\n", $output));
@@ -81,7 +59,6 @@ class ReleaseDocumentController extends Controller
         $pdf->setPrintHeader(false);
         $pdf->setPrintFooter(false);
 
-        // Import every page from the source PDF
         $pageCount = $pdf->setSourceFile($inputPath);
 
         for ($i = 1; $i <= $pageCount; $i++) {
@@ -92,19 +69,16 @@ class ReleaseDocumentController extends Controller
             $pdf->useTemplate($tplId, 0, 0, $size['width'], $size['height'], true);
         }
 
-        // AES-256 encryption
-        // permissions: ['print'] = recipient can print but not copy/edit
-        // mode 3 = AES-256
         $pdf->SetProtection(
-            ['print'],   // allowed permissions
-            $password,   // user password (to open)
-            null,        // owner password (null = random)
-            3,           // encryption mode: 3 = AES-256
+            ['print'],
+            $password,
+            null,
+            3,
             null
         );
 
         $outputPath = tempnam(sys_get_temp_dir(), 'enc_pdf_') . '.pdf';
-        $pdf->Output($outputPath, 'F'); // 'F' = write to file
+        $pdf->Output($outputPath, 'F');
 
         if (!file_exists($outputPath) || filesize($outputPath) === 0) {
             throw new \Exception('Encrypted PDF was not created or is empty.');
@@ -115,10 +89,15 @@ class ReleaseDocumentController extends Controller
 
     /**
      * POST /api/documents/release/{documentType}/{id}
+     * 
+     * FIXED: Email is sent BEFORE cleanup, ensuring the encrypted PDF file
+     * exists when the email is processed (whether sync or queued).
      */
     public function release(Request $request, string $documentType, int $id): JsonResponse
     {
         $encryptedTempPath = null;
+        $emailSent = false;
+        $emailError = null;
 
         try {
             $modelClass = self::MODEL_MAP[$documentType] ?? null;
@@ -137,11 +116,9 @@ class ReleaseDocumentController extends Controller
             /** @var \Illuminate\Database\Eloquent\Model $record */
             $record   = $modelClass::findOrFail($id);
             $file     = $request->file('file');
-            $realPath = $file->getRealPath(); // grab BEFORE anything moves the temp file
+            $realPath = $file->getRealPath();
 
             // ── 1. GENERATE PASSWORD ──────────────────────────────────────────
-            // Pattern: strlen(firstname) + lastname + age
-            // e.g.  "Juan" → 4,  surname="Cruz",  age=25  →  "4Cruz25"
             $firstName = $record->first_name ?? '';
             $lastName  = $record->surname    ?? '';
             $age       = (int) ($record->age ?? 0);
@@ -154,9 +131,11 @@ class ReleaseDocumentController extends Controller
             $encryptedTempPath = $this->encryptPdf($realPath, $password);
             $encryptedContent  = file_get_contents($encryptedTempPath);
 
+            if (!$encryptedContent) {
+                throw new \Exception('Failed to read encrypted PDF content.');
+            }
+
             // ── 3. HASH THE ENCRYPTED PDF ─────────────────────────────────────
-            // Always hash the encrypted version so verification works when
-            // the recipient uploads the same password-protected file back.
             $hash = hash('sha256', $encryptedContent);
 
             // ── 4. UPLOAD ENCRYPTED PDF TO S3 ────────────────────────────────
@@ -227,52 +206,84 @@ class ReleaseDocumentController extends Controller
                 ]);
             }
 
-            // ── 8. SEND EMAIL ─────────────────────────────────────────────────
-            // ReleasedDocumentMail receives:
-            //   $record          → for addressee details in the email body
-            //   $encryptedTempPath → the encrypted PDF to attach
-            //   $password        → shown in the email body so recipient can open it
+            // ── 8. SEND EMAIL (BEFORE FILE CLEANUP!) ──────────────────────────
+            // ✅ FIXED: Email is sent BEFORE the finally block cleans up the temp file
+            // This ensures the file exists whether the mail is processed sync or queued.
             if (!empty($record->email)) {
                 try {
-                    // Mail::to($record->email)->send(new DocumentPasswordMail($record, $password));
-                    Mail::to($record->email)->send(new ReleasedDocumentMail($record, $encryptedTempPath, $password));
+                    Log::info("Sending released document email to: {$record->email}", [
+                        'record_id' => $record->id,
+                        'temp_file_exists' => file_exists($encryptedTempPath),
+                    ]);
+
+                    Mail::to($record->email)->send(
+                        new ReleasedDocumentMail($record, $encryptedTempPath, $password)
+                    );
+
+                    $emailSent = true;
+                    Log::info("Email sent successfully to: {$record->email}");
+
                 } catch (\Exception $mailError) {
-                    Log::error("Email failed: " . $mailError->getMessage());
+                    $emailError = $mailError->getMessage();
+                    Log::error("Email sending failed: {$emailError}", [
+                        'record_id' => $record->id,
+                        'email' => $record->email,
+                        'exception' => get_class($mailError),
+                    ]);
                 }
             } else {
-                Log::warning("No email for record #{$record->id}");
+                Log::warning("No email address for record #{$record->id}");
+            }
+
+            // ── 9. RETURN RESPONSE ────────────────────────────────────────────
+            // Include email status in response so caller knows if it was sent
+            $responseData = [
+                'id'       => $record->id,
+                'status'   => 'RELEASED',
+                'file'     => $s3Path,
+                'cid'      => $cid,
+                'hash'     => $hash,
+                'password' => $password,
+                'email_sent' => $emailSent,
+            ];
+
+            if ($emailError) {
+                $responseData['email_error'] = $emailError;
             }
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Document released, encrypted, and emailed successfully.',
-                'data'    => [
-                    'id'       => $record->id,
-                    'status'   => 'RELEASED',
-                    'file'     => $s3Path,
-                    'cid'      => $cid,
-                    'hash'     => $hash,
-                    'password' => $password,
-                ],
+                'message' => 'Document released, encrypted, and' . ($emailSent ? ' emailed' : ' queued for email') . ' successfully.',
+                'data'    => $responseData,
             ]);
 
         } catch (\Exception $e) {
-            Log::error("Release document failed: " . $e->getMessage());
-            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+            Log::error("Release document failed: " . $e->getMessage(), [
+                'exception' => get_class($e),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage(),
+                'email_sent' => $emailSent,
+                'email_error' => $emailError,
+            ], 500);
 
         } finally {
-            // Always delete the encrypted temp file regardless of outcome
+            // ✅ CLEANUP: Delete temp file after everything (including email) is done
             if ($encryptedTempPath && file_exists($encryptedTempPath)) {
-                @unlink($encryptedTempPath);
+                if (@unlink($encryptedTempPath)) {
+                    Log::debug("Cleaned up encrypted temp file: {$encryptedTempPath}");
+                } else {
+                    Log::warning("Failed to delete temp file: {$encryptedTempPath}");
+                }
             }
         }
     }
 
     /**
      * POST /api/documents/verify
-     *
-     * The user must upload the same encrypted PDF they received.
-     * The SHA-256 of that file is compared against the stored hash.
      */
     public function verify(Request $request): JsonResponse
     {
@@ -318,7 +329,7 @@ class ReleaseDocumentController extends Controller
     }
 
     /**
-     * GET /api/documents/download/{documentType}/{id}
+     * GET /api/documents/release/barangay-clearances/{id}/download
      */
     public function download(string $documentType, int $id): JsonResponse
     {

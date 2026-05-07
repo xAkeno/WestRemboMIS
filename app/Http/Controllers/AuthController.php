@@ -423,28 +423,24 @@ class AuthController extends Controller
         $request->validate([
             'profileImage' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
- 
-        $user = $request->user(); // ← was auth()->user(), which returns null with Sanctum cookie auth
- 
-        if (!$user) {
-            return response()->json(['status' => 'failed', 'message' => 'Unauthenticated'], 401);
-        }
- 
+
+        $user = auth()->user();
+
         // Delete old image from S3 if one exists
         if ($user->url_photo) {
             Storage::disk('s3')->delete($user->url_photo);
         }
- 
+
         // Store on S3 — putFile returns the full S3 key e.g. "profile-images/abc123.jpg"
         $path = Storage::disk('s3')->putFile('profile-images', $request->file('profileImage'));
- 
+
         // Save the raw S3 path (NOT a full URL) so every endpoint is consistent
         $user->url_photo = $path;
         $user->save();
- 
+
         return response()->json([
             'success'   => true,
-            'url_photo' => $path,
+            'url_photo' => $path,   // raw path — frontend builds the full URL
             'message'   => 'Profile image uploaded successfully',
         ]);
     }
