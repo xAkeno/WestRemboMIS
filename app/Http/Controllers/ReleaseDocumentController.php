@@ -39,8 +39,8 @@ class ReleaseDocumentController extends Controller
         $cmd = "$gsBinary -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dNOPAUSE -dBATCH -sOutputFile=\"$outputPath\" \"$inputPath\" 2>&1";
         exec($cmd, $output, $returnVar);
 
-        Log::error('Ghostscript output:', $output);
-        Log::error('Ghostscript return code: ' . $returnVar);
+        Log::info('Ghostscript output:', $output);
+        Log::info('Ghostscript return code: ' . $returnVar);
 
         if ($returnVar !== 0 || !file_exists($outputPath)) {
             throw new \Exception('Ghostscript failed: ' . implode("\n", $output));
@@ -89,15 +89,24 @@ class ReleaseDocumentController extends Controller
 
     /**
      * POST /api/documents/release/{documentType}/{id}
-     * 
-     * FIXED: Email is sent BEFORE cleanup, ensuring the encrypted PDF file
-     * exists when the email is processed (whether sync or queued).
+     * Can also accept ?status=PROCESS query parameter for different status
      */
     public function release(Request $request, string $documentType, int $id): JsonResponse
     {
         $encryptedTempPath = null;
         $emailSent = false;
         $emailError = null;
+        
+        // Get the target status from query parameter (default to RELEASED)
+        $targetStatus = strtoupper($request->query('status', 'RELEASED'));
+        
+        // Validate target status
+        if (!in_array($targetStatus, ['RELEASED', 'PROCESS'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid status parameter. Allowed values: RELEASED, PROCESS',
+            ], 422);
+        }
 
         try {
             $modelClass = self::MODEL_MAP[$documentType] ?? null;
@@ -125,7 +134,7 @@ class ReleaseDocumentController extends Controller
 
             $password = $this->generatePassword($firstName, $lastName, $age);
 
-            Log::info("Password generated for record #{$id}: {$password}");
+            Log::info("Password generated for record #{$id} for status {$targetStatus}: {$password}");
 
             // ── 2. ENCRYPT PDF ────────────────────────────────────────────────
             $encryptedTempPath = $this->encryptPdf($realPath, $password);
@@ -144,11 +153,16 @@ class ReleaseDocumentController extends Controller
                 '_',
                 $record->bcert_number ?? (string) $id
             );
+            $statusFolder = strtolower($targetStatus);
             $filename = "{$id}_{$bcertSlug}.pdf";
-            $s3Path   = "released_documents/{$documentType}/{$filename}";
+            $s3Path   = "{$statusFolder}_documents/{$documentType}/{$filename}";
 
-            if (!empty($record->released_document_path)) {
+            // Delete old document if exists
+            if ($targetStatus === 'RELEASED' && !empty($record->released_document_path)) {
                 Storage::disk('s3')->delete($record->released_document_path);
+            }
+            if ($targetStatus === 'PROCESS' && !empty($record->process_document_path)) {
+                Storage::disk('s3')->delete($record->process_document_path);
             }
 
             Storage::disk('s3')->put($s3Path, $encryptedContent);
@@ -166,58 +180,70 @@ class ReleaseDocumentController extends Controller
 
             $cid = $pinataResponse->json()['IpfsHash'];
 
-            // ── 6. UPDATE RECORD ──────────────────────────────────────────────
-            $record->update([
-                'status'                 => 'RELEASED',
-                'released_document_path' => $s3Path,
-                'released_at'            => now(),
-                'document_hash'          => $hash,
-                'ipfs_cid'               => $cid,
-                'issued_date'            => $record->issued_date ?? now(),
-                'issued_at'              => $record->issued_at   ?? 'Barangay Hall',
-                'issued_on'              => $record->issued_on   ?? now(),
-            ]);
-
-            // ── 7. TICKET SYNC ────────────────────────────────────────────────
-            $ticket = \App\Models\Ticket::where('serviceable_type', $modelClass)
-                ->where('serviceable_id', $record->id)
-                ->first();
-
-            if (!$ticket) {
-                $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
-                    ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
-                    ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
-                    ->first();
-
-                if ($kiosk) {
-                    $ticket = \App\Models\Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
-                        ->where('serviceable_id', $kiosk->id)
-                        ->first();
-                }
-            }
-
-            if ($ticket) {
-                $ticket->update(['status' => 'Released', 'released_at' => now()]);
+            // ── 6. UPDATE RECORD BASED ON TARGET STATUS ───────────────────────
+            if ($targetStatus === 'RELEASED') {
+                $record->update([
+                    'status'                 => 'RELEASED',
+                    'released_document_path' => $s3Path,
+                    'released_at'            => now(),
+                    'document_hash'          => $hash,
+                    'ipfs_cid'               => $cid,
+                    'issued_date'            => $record->issued_date ?? now(),
+                    'issued_at'              => $record->issued_at   ?? 'Barangay Hall',
+                    'issued_on'              => $record->issued_on   ?? now(),
+                    'expires_at'             => now()->addMonths(6),
+                ]);
             } else {
-                Log::warning("No ticket found for released document", [
-                    'type' => $documentType,
-                    'id'   => $id,
-                    'name' => "{$record->first_name} {$record->surname}",
+                // For PROCESS status - store in separate fields
+                $record->update([
+                    'status'                    => 'PROCESS',
+                    'process_document_path'     => $s3Path,
+                    'process_document_sent_at'  => now(),
+                    'process_document_hash'     => $hash,
+                    'process_ipfs_cid'          => $cid,
                 ]);
             }
 
+            // ── 7. TICKET SYNC (only for RELEASED) ────────────────────────────
+            if ($targetStatus === 'RELEASED') {
+                $ticket = \App\Models\Ticket::where('serviceable_type', $modelClass)
+                    ->where('serviceable_id', $record->id)
+                    ->first();
+
+                if (!$ticket) {
+                    $kiosk = \App\Models\Kiosk::where('service_type', 'Barangay Clearance')
+                        ->whereRaw('LOWER(first_name) = ?', [strtolower($record->first_name)])
+                        ->whereRaw('LOWER(surname)    = ?', [strtolower($record->surname)])
+                        ->first();
+
+                    if ($kiosk) {
+                        $ticket = \App\Models\Ticket::where('serviceable_type', 'App\\Models\\Kiosk')
+                            ->where('serviceable_id', $kiosk->id)
+                            ->first();
+                    }
+                }
+
+                if ($ticket) {
+                    $ticket->update(['status' => 'Released', 'released_at' => now()]);
+                } else {
+                    Log::warning("No ticket found for released document", [
+                        'type' => $documentType,
+                        'id'   => $id,
+                        'name' => "{$record->first_name} {$record->surname}",
+                    ]);
+                }
+            }
+
             // ── 8. SEND EMAIL (BEFORE FILE CLEANUP!) ──────────────────────────
-            // ✅ FIXED: Email is sent BEFORE the finally block cleans up the temp file
-            // This ensures the file exists whether the mail is processed sync or queued.
             if (!empty($record->email)) {
                 try {
-                    Log::info("Sending released document email to: {$record->email}", [
+                    Log::info("Sending {$targetStatus} document email to: {$record->email}", [
                         'record_id' => $record->id,
                         'temp_file_exists' => file_exists($encryptedTempPath),
                     ]);
 
                     Mail::to($record->email)->send(
-                        new ReleasedDocumentMail($record, $encryptedTempPath, $password)
+                        new ReleasedDocumentMail($record, $encryptedTempPath, $password, $targetStatus)
                     );
 
                     $emailSent = true;
@@ -236,14 +262,13 @@ class ReleaseDocumentController extends Controller
             }
 
             // ── 9. RETURN RESPONSE ────────────────────────────────────────────
-            // Include email status in response so caller knows if it was sent
             $responseData = [
-                'id'       => $record->id,
-                'status'   => 'RELEASED',
-                'file'     => $s3Path,
-                'cid'      => $cid,
-                'hash'     => $hash,
-                'password' => $password,
+                'id'         => $record->id,
+                'status'     => $targetStatus,
+                'file'       => $s3Path,
+                'cid'        => $cid,
+                'hash'       => $hash,
+                'password'   => $password,
                 'email_sent' => $emailSent,
             ];
 
@@ -253,7 +278,7 @@ class ReleaseDocumentController extends Controller
 
             return response()->json([
                 'status'  => 'success',
-                'message' => 'Document released, encrypted, and' . ($emailSent ? ' emailed' : ' queued for email') . ' successfully.',
+                'message' => "Document marked as {$targetStatus}, encrypted, and" . ($emailSent ? ' emailed' : ' queued for email') . ' successfully.',
                 'data'    => $responseData,
             ]);
 
@@ -271,7 +296,7 @@ class ReleaseDocumentController extends Controller
             ], 500);
 
         } finally {
-            // ✅ CLEANUP: Delete temp file after everything (including email) is done
+            // ✅ CLEANUP: Delete temp file after everything is done
             if ($encryptedTempPath && file_exists($encryptedTempPath)) {
                 if (@unlink($encryptedTempPath)) {
                     Log::debug("Cleaned up encrypted temp file: {$encryptedTempPath}");
