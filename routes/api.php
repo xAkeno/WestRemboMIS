@@ -140,6 +140,9 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
         Route::post('{type}/{id}/replies', [DocumentReplyController::class, 'store']);
     });
 
+    Route::put('/users/{id}/permissions', [AuthController::class, 'updatePermissions']);
+    Route::put('/users/{id}/role', [AuthController::class, 'updateRole']); // ← add here
+
 
     // routes/api.php
     // Route::post('schedules/{documentType}/{id}/no-show', [ScheduleController::class, 'markNoShow']);

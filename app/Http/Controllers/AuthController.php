@@ -121,6 +121,23 @@ class AuthController extends Controller
         ], 201);
     }
 
+    public function updateRole(Request $request, $id)
+    {
+        $request->validate([
+            'role' => 'required|string|in:ADMIN,STAFF,KAGAWAD',
+        ]);
+ 
+        $user = User::findOrFail($id);
+        $user->role = $request->role;
+        $user->save();
+ 
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'User role updated to ' . $request->role,
+            'data'    => $user,
+        ]);
+    }
+
     // ─── GET /api/user ────────────────────────────────────────────────────────
     public function user(Request $request)
     {
