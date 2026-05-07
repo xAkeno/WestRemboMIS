@@ -41,6 +41,10 @@
             'ipfs_cid',
             'email',
             'or_no',
+            'downloaded_document_path',
+            'downloaded_document_hash',
+            'downloaded_ipfs_cid',
+            'downloaded_at',
         ];
         protected $casts = [
             'issued_date' => 'date',

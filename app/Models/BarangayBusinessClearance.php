@@ -42,6 +42,10 @@ class BarangayBusinessClearance extends Model
         'document_hash',
         'ipfs_cid',
         'email',
+        'downloaded_document_path',
+        'downloaded_document_hash',
+        'downloaded_ipfs_cid',
+        'downloaded_at',
     ];
 
     protected $casts = [

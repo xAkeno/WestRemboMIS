@@ -47,6 +47,10 @@ class UpdateBarangayBuildingClearanceRequest extends FormRequest
             'barangay_position' => 'nullable|string|max:50',
             'rejection_reason' => 'nullable|string|max:1000',
             'status' => 'sometimes|string|in:ENCODED,SCHEDULED,VERIFICATION,TO_PAY,PAID,RELEASED,REJECTED,RESCHEDULED,INCOMPLETE,EXPIRED,PENDING,INSPECTING,ARCHIVED,NO_SHOW,PROCESS,REVIEW',
+            'downloaded_document_path' => 'nullable|string|max:500',
+            'downloaded_document_hash' => 'nullable|string|max:255',
+            'downloaded_ipfs_cid'      => 'nullable|string|max:255',
+            'downloaded_at'            => 'nullable|date',
         ];
     }
 
