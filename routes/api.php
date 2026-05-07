@@ -106,6 +106,9 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/users/{id}', [AuthController::class, 'show']);
     Route::put('/users/{id}/permissions', [AuthController::class, 'updatePermissions']);
 
+    Route::post('documents/release/{documentType}/{id}/download-register', 
+    [ReleaseDocumentController::class, 'downloadRegister']);
+
     // ── Auth / profile ────────────────────────────────────────────────────────
     Route::get('/me',      [AuthController::class, 'me']);
     Route::get('/details', [AuthController::class, 'details']);

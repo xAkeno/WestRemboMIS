@@ -394,4 +394,108 @@ class ReleaseDocumentController extends Controller
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
     }
+
+    public function downloadRegister(Request $request, string $documentType, int $id): JsonResponse
+    {
+        try {
+            $modelClass = self::MODEL_MAP[$documentType] ?? null;
+    
+            if (!$modelClass) {
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => "Unknown document type: {$documentType}",
+                ], 422);
+            }
+    
+            $request->validate([
+                'file' => 'required|file|mimes:pdf|max:20480',
+            ]);
+    
+            /** @var \Illuminate\Database\Eloquent\Model $record */
+            $record   = $modelClass::findOrFail($id);
+            $file     = $request->file('file');
+            $pdfBytes = file_get_contents($file->getRealPath());
+    
+            if (!$pdfBytes) {
+                throw new \Exception('Failed to read uploaded PDF.');
+            }
+    
+            // ── 1. HASH ──────────────────────────────────────────────────────────
+            $hash = hash('sha256', $pdfBytes);
+    
+            // ── 2. BUILD S3 PATH ─────────────────────────────────────────────────
+            $bcertSlug = preg_replace(
+                '/[^a-zA-Z0-9\-_]/',
+                '_',
+                $record->bcert_number ?? (string) $id
+            );
+            $filename = "{$id}_{$bcertSlug}.pdf";
+            $s3Path   = "downloaded_documents/{$documentType}/{$filename}";
+    
+            // Delete old downloaded copy if it exists
+            if (!empty($record->downloaded_document_path)) {
+                Storage::disk('s3')->delete($record->downloaded_document_path);
+            }
+    
+            // ── 3. UPLOAD TO S3 ──────────────────────────────────────────────────
+            Storage::disk('s3')->put($s3Path, $pdfBytes);
+    
+            // ── 4. UPLOAD TO PINATA (IPFS) ───────────────────────────────────────
+            $pinataResponse = Http::withHeaders([
+                'pinata_api_key'        => env('PINATA_API_KEY'),
+                'pinata_secret_api_key' => env('PINATA_SECRET_API_KEY'),
+            ])->attach('file', $pdfBytes, $filename)
+            ->post('https://api.pinata.cloud/pinning/pinFileToIPFS');
+    
+            if (!$pinataResponse->successful()) {
+                throw new \Exception('Pinata upload failed: ' . $pinataResponse->body());
+            }
+    
+            $cid = $pinataResponse->json()['IpfsHash'];
+    
+            // ── 5. PERSIST TO DB (no status change, no email) ────────────────────
+            $record->update([
+                'downloaded_document_path' => $s3Path,
+                'downloaded_at'            => now(),
+                'downloaded_document_hash' => $hash,
+                'downloaded_ipfs_cid'      => $cid,
+            ]);
+    
+            Log::info("Download registered for {$documentType}#{$id}", [
+                'cid'  => $cid,
+                'hash' => $hash,
+                's3'   => $s3Path,
+            ]);
+    
+            // ── 6. GENERATE SIGNED URL (15 min) ──────────────────────────────────
+            $signedUrl = Storage::disk('s3')->temporaryUrl(
+                $s3Path,
+                now()->addMinutes(15)
+            );
+    
+            return response()->json([
+                'status'  => 'success',
+                'message' => 'Document registered and ready for download.',
+                'data'    => [
+                    'url'        => $signedUrl,
+                    'expires_in' => 900,
+                    'filename'   => $filename,
+                    'cid'        => $cid,
+                    'hash'       => $hash,
+                ],
+            ]);
+    
+        } catch (\Exception $e) {
+            Log::error("downloadRegister failed: " . $e->getMessage(), [
+                'documentType' => $documentType,
+                'id'           => $id,
+                'trace'        => $e->getTraceAsString(),
+            ]);
+    
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }
