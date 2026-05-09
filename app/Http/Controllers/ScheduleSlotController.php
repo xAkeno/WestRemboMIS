@@ -15,12 +15,37 @@ class ScheduleSlotController extends Controller
     */
     public function index(Request $request): JsonResponse
     {
-        $slots = ScheduleSlot::orderBy('schedule_time')
-            ->get();
+        $type = $request->query('document_type');
+        $date = $request->query('date');
+
+        $query = ScheduleSlot::orderBy('schedule_time');
+
+        if ($type) {
+            $query->where('document_type', $type);
+        }
+
+        $slots = $query->get();
+
+        $data = $slots->map(function ($slot) use ($date, $type) {
+            $remaining = $slot->max_slots; // default if no date filter
+
+            if ($date && $type) {
+                $booked = \App\Models\Schedule::where('document_type', $slot->document_type)
+                    ->where('schedule_date', $date)
+                    ->where('schedule_time', $slot->schedule_time)
+                    ->count();
+
+                $remaining = max(0, $slot->max_slots - $booked);
+            }
+
+            return array_merge($slot->toArray(), [
+                'max_slots' => $remaining, // overwrite with remaining
+            ]);
+        });
 
         return response()->json([
             'status' => 'success',
-            'data' => $slots
+            'data'   => $data,
         ]);
     }
 
