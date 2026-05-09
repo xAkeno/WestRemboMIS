@@ -27,11 +27,11 @@ class ScheduleSlotController extends Controller
         $slots = $query->get();
 
         $data = $slots->map(function ($slot) use ($date, $type) {
-            $remaining = $slot->max_slots; // default if no date filter
+            $remaining = $slot->max_slots;
 
             if ($date && $type) {
                 $booked = \App\Models\Schedule::where('document_type', $slot->document_type)
-                    ->where('schedule_date', $date)
+                    ->where('schedule_date', $date)          // date filter on schedules ✓
                     ->where('schedule_time', $slot->schedule_time)
                     ->count();
 
@@ -39,7 +39,7 @@ class ScheduleSlotController extends Controller
             }
 
             return array_merge($slot->toArray(), [
-                'max_slots' => $remaining, // overwrite with remaining
+                'max_slots' => $remaining,
             ]);
         });
 
