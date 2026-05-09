@@ -7,14 +7,14 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Traits\ExtractsUserFromAuthToken;
 use App\Services\TicketService;
-
+use App\Models\ScheduleSlot;
 class ScheduleController extends Controller
 {
     use ExtractsUserFromAuthToken;
 
     protected $ticketService;
 
-    const LIMIT_PER_GROUP = 50;
+    // const LIMIT_PER_GROUP = 50;
 
     public function __construct(TicketService $ticketService)
     {
@@ -31,35 +31,32 @@ class ScheduleController extends Controller
         $type = $request->document_type;
         $date = $request->date;
 
-        $schedules = Schedule::where('document_type', $type)
+        $slots = ScheduleSlot::where('document_type', $type)
             ->where('schedule_date', $date)
+            ->orderBy('schedule_time')
             ->get();
 
-        $morningCount = 0;
-        $afternoonCount = 0;
+        $data = [];
 
-        foreach ($schedules as $sched) {
-            $group = $this->getTimeGroup($sched->schedule_time);
+        foreach ($slots as $slot) {
 
-            if ($group === 'morning') {
-                $morningCount++;
-            } else {
-                $afternoonCount++;
-            }
+            $count = Schedule::where('document_type', $type)
+                ->where('schedule_date', $date)
+                ->where('schedule_time', $slot->schedule_time)
+                ->count();
+
+            $data[] = [
+                'time' => $slot->schedule_time,
+                'max_slots' => $slot->max_slots,
+                'used_slots' => $count,
+                'remaining_slots' => max(0, $slot->max_slots - $count),
+                'available' => $count < $slot->max_slots,
+            ];
         }
 
         return response()->json([
             'status' => 'success',
-            'data' => [
-                'morning' => [
-                    'available' => $morningCount < self::LIMIT_PER_GROUP,
-                    'remaining' => max(0, self::LIMIT_PER_GROUP - $morningCount)
-                ],
-                'afternoon' => [
-                    'available' => $afternoonCount < self::LIMIT_PER_GROUP,
-                    'remaining' => max(0, self::LIMIT_PER_GROUP - $afternoonCount)
-                ]
-            ]
+            'data' => $data
         ]);
     }
 
@@ -76,32 +73,56 @@ class ScheduleController extends Controller
             'document_type'   => 'required|string',
             'document_number' => 'required|string',
             'schedule_date'   => 'required|date',
-            'time_group'      => 'required|in:morning,afternoon',
+            'schedule_time'   => 'required',
         ]);
 
-        $group = $request->time_group;
+        // $group = $request->time_group;
+
+        // $count = Schedule::where('document_type', $request->document_type)
+        //     ->where('schedule_date', $request->schedule_date)
+        //     ->get()
+        //     ->filter(fn($s) => $this->getTimeGroup($s->schedule_time) === $group)
+        //     ->count();
+
+        // if ($count >= self::LIMIT_PER_GROUP) {
+        //     return response()->json([
+        //         'status' => 'error',
+        //         'message' => ucfirst($group) . ' slot is already full.',
+        //     ], 422);
+        // }
+
+        // $time = $this->generateTime($group, $count);
+
+        $slot = ScheduleSlot::where('document_type', $request->document_type)
+            ->where('schedule_date', $request->schedule_date)
+            ->where('schedule_time', $request->schedule_time)
+            ->first();
+
+        if (!$slot) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Selected schedule slot does not exist.'
+            ], 404);
+        }
 
         $count = Schedule::where('document_type', $request->document_type)
             ->where('schedule_date', $request->schedule_date)
-            ->get()
-            ->filter(fn($s) => $this->getTimeGroup($s->schedule_time) === $group)
+            ->where('schedule_time', $request->schedule_time)
             ->count();
 
-        if ($count >= self::LIMIT_PER_GROUP) {
+        if ($count >= $slot->max_slots) {
             return response()->json([
                 'status' => 'error',
-                'message' => ucfirst($group) . ' slot is already full.',
+                'message' => 'Selected slot is already full.'
             ], 422);
         }
-
-        $time = $this->generateTime($group, $count);
 
         $schedule = Schedule::create([
             'user_id'         => $userId,
             'document_type'   => $request->document_type,
             'document_number' => $request->document_number,
             'schedule_date'   => $request->schedule_date,
-            'schedule_time'   => $time,
+            'schedule_time'   => $request->schedule_time,
         ]);
 
         $ticket = $this->ticketService->createTicketForSchedule(
@@ -190,7 +211,7 @@ class ScheduleController extends Controller
     {
         $request->validate([
             'schedule_date' => 'required|date',
-            'time_group'    => 'required|in:morning,afternoon',
+            'schedule_time' => 'required',
         ]);
 
         $schedule = Schedule::where('document_number', $documentNumber)->first();
@@ -202,28 +223,55 @@ class ScheduleController extends Controller
             ], 404);
         }
 
-        $group = $request->time_group;
+        // $group = $request->time_group;
 
-        // Count excluding current record
-        $count = Schedule::where('document_type', $schedule->document_type)
+        // // Count excluding current record
+        // $count = Schedule::where('document_type', $schedule->document_type)
+        //     ->where('schedule_date', $request->schedule_date)
+        //     ->where('id', '!=', $schedule->id)
+        //     ->get()
+        //     ->filter(fn($s) => $this->getTimeGroup($s->schedule_time) === $group)
+        //     ->count();
+
+        // if ($count >= self::LIMIT_PER_GROUP) {
+        //     return response()->json([
+        //         'status' => 'error',
+        //         'message' => ucfirst($group) . ' slot is already full.',
+        //     ], 422);
+        // }
+
+        // $time = $this->generateTime($group, $count);
+
+
+        $slot = ScheduleSlot::where('document_type', $schedule->document_type)
             ->where('schedule_date', $request->schedule_date)
-            ->where('id', '!=', $schedule->id)
-            ->get()
-            ->filter(fn($s) => $this->getTimeGroup($s->schedule_time) === $group)
-            ->count();
+            ->where('schedule_time', $request->schedule_time)
+            ->first();
 
-        if ($count >= self::LIMIT_PER_GROUP) {
+        if (!$slot) {
             return response()->json([
                 'status' => 'error',
-                'message' => ucfirst($group) . ' slot is already full.',
+                'message' => 'Selected slot does not exist.',
+            ], 404);
+        }
+
+        $count = Schedule::where('document_type', $schedule->document_type)
+            ->where('schedule_date', $request->schedule_date)
+            ->where('schedule_time', $request->schedule_time)
+            ->where('id', '!=', $schedule->id)
+            ->count();
+
+
+        if ($count >= $slot->max_slots) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Selected slot is already full.',
             ], 422);
         }
 
-        $time = $this->generateTime($group, $count);
-
         $schedule->update([
             'schedule_date' => $request->schedule_date,
-            'schedule_time' => $time,
+            'schedule_time' => $request->schedule_time,
         ]);
 
         // Always set to RESCHEDULED regardless of previous status
@@ -263,24 +311,24 @@ class ScheduleController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    private function getTimeGroup(string $time): string
-    {
-        $hour = intval(substr($time, 0, 2));
-        return $hour < 12 ? 'morning' : 'afternoon';
-    }
+    // private function getTimeGroup(string $time): string
+    // {
+    //     $hour = intval(substr($time, 0, 2));
+    //     return $hour < 12 ? 'morning' : 'afternoon';
+    // }
 
-    private function generateTime(string $group, int $index): string
-    {
-        if ($group === 'morning') {
-            $hour   = 8 + floor($index / 6);
-            $minute = ($index % 6) * 10;
-        } else {
-            $hour   = 13 + floor($index / 6);
-            $minute = ($index % 6) * 10;
-        }
+    // private function generateTime(string $group, int $index): string
+    // {
+    //     if ($group === 'morning') {
+    //         $hour   = 8 + floor($index / 6);
+    //         $minute = ($index % 6) * 10;
+    //     } else {
+    //         $hour   = 13 + floor($index / 6);
+    //         $minute = ($index % 6) * 10;
+    //     }
 
-        return sprintf('%02d:%02d', $hour, $minute);
-    }
+    //     return sprintf('%02d:%02d', $hour, $minute);
+    // }
 
     private function updateDocumentStatus(string $documentType, string $documentNumber, string $status): void
     {

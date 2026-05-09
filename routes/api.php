@@ -34,6 +34,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\SettingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\QueueController;
+use App\Http\Controllers\ScheduleSlotController;
 // ─── Public routes ──────────────────────────────────────────────────────────
 Route::post('/login', [AuthController::class, 'supabaseLogin']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -81,6 +82,9 @@ Route::prefix('queue')->group(function () {
     // DELETE routes
     Route::delete('/cleanup', [QueueController::class, 'cleanup']);
 });
+
+
+
 
 // ─── Authenticated routes ────────────────────────────────────────────────────
 Route::middleware([EnsureTokenIsValid::class])->group(function () {
@@ -145,6 +149,11 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
 
     Route::put('/users/{id}/permissions', [AuthController::class, 'updatePermissions']);
     Route::put('/users/{id}/role', [AuthController::class, 'updateRole']); // ← add here
+
+    Route::post('/schedule-slots', [ScheduleSlotController::class, 'store']);
+    Route::get('/schedule-slots', [ScheduleSlotController::class, 'index']);
+    Route::put('/schedule-slots/{id}', [ScheduleSlotController::class, 'update']);
+    Route::delete('/schedule-slots/{id}', [ScheduleSlotController::class, 'destroy']);
 
 
     // routes/api.php
