@@ -20,11 +20,11 @@ use Illuminate\Support\Facades\Http;
 class AuthController extends Controller
 {
     /**
-     * Register a new user
+     * Register a new user — now supports parent ID for dependent students
      */
     public function register(Request $request)
     {
-        // ── STEP 1: Validate all fields including recaptcha_token ──
+        // ── STEP 1: Validate all fields including parent IDs ──
         $request->validate([
             'recaptcha_token'    => 'required|string',
             'first_name'         => 'required|string|max:255',
@@ -39,7 +39,20 @@ class AuthController extends Controller
             'house_block_lot_no' => 'required|string|max:255',
             'street'             => 'required|string|max:255',
             'zone_purok'         => 'required|string|max:255',
+            // ← NEW: Parent ID fields — required if id_type is school_id
+            'id_type'            => 'nullable|string|in:national_id,sss,philhealth,school_id,drivers_license,pwd_id',
+            'parent_id_url'      => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'parent_id_url_back' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
         ]);
+
+        // ← NEW: Dependent validation — if school_id, require both parent IDs
+        if ($request->id_type === 'school_id') {
+            if (!$request->hasFile('parent_id_url') || !$request->hasFile('parent_id_url_back')) {
+                return response()->json([
+                    'message' => 'Dependent students (School ID) must provide both front and back of parent\'s ID.',
+                ], 422);
+            }
+        }
 
         // ── STEP 2: Verify reCAPTCHA with Google ──
         $recaptchaResponse = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
@@ -66,6 +79,18 @@ class AuthController extends Controller
         $imagePathBack = null;
         if ($request->hasFile('id_url_back')) {
             $imagePathBack = Storage::disk('s3')->putFile('ids', $request->file('id_url_back'));
+        }
+
+        // ← NEW: STEP 4B: Upload parent ID (front) ──
+        $parentIdUrl = null;
+        if ($request->hasFile('parent_id_url')) {
+            $parentIdUrl = Storage::disk('s3')->putFile('ids/parent', $request->file('parent_id_url'));
+        }
+
+        // ← NEW: STEP 4C: Upload parent ID (back) ──
+        $parentIdUrlBack = null;
+        if ($request->hasFile('parent_id_url_back')) {
+            $parentIdUrlBack = Storage::disk('s3')->putFile('ids/parent', $request->file('parent_id_url_back'));
         }
 
         // ── STEP 5: Create user in Supabase ──
@@ -103,6 +128,11 @@ class AuthController extends Controller
             'password'           => Hash::make($request->password),
             'id_url'             => $imagePath,
             'id_url_back'        => $imagePathBack,
+            // ← NEW: Store parent IDs and id_type
+            'parent_id_url'      => $parentIdUrl,        // NEW column needed in migration
+            'parent_id_url_back' => $parentIdUrlBack,    // NEW column needed in migration
+            'id_type'            => $request->id_type,   // NEW column needed in migration
+            'is_dependent'       => $request->id_type === 'school_id' ? true : false,  // NEW column needed
             'supabase_id'        => $supabaseUser['id'] ?? null,
         ]);
 
@@ -116,7 +146,7 @@ class AuthController extends Controller
 
         return response()->json([
             'status'  => 'success',
-            'message' => 'Account created successfully (Synced with Supabase)',
+            'message' => 'Account created successfully (Synced with Supabase)' . ($request->id_type === 'school_id' ? ' — Dependent student registered.' : ''),
             'data'    => $user,
         ], 201);
     }
@@ -132,19 +162,27 @@ class AuthController extends Controller
 
         $workerBaseUrl = rtrim(env('R2_WORKER_URL'), '/');
 
-        $photoUrl  = $user->url_photo   ? $workerBaseUrl . '/' . ltrim($user->url_photo, '/')   : asset('images/default-profile.png');
-        $idFrontUrl = $user->id_url     ? $workerBaseUrl . '/' . ltrim($user->id_url, '/')      : null;
-        $idBackUrl  = $user->id_url_back ? $workerBaseUrl . '/' . ltrim($user->id_url_back, '/') : null;
+        $photoUrl     = $user->url_photo      ? $workerBaseUrl . '/' . ltrim($user->url_photo, '/')      : asset('images/default-profile.png');
+        $idFrontUrl   = $user->id_url         ? $workerBaseUrl . '/' . ltrim($user->id_url, '/')         : null;
+        $idBackUrl    = $user->id_url_back    ? $workerBaseUrl . '/' . ltrim($user->id_url_back, '/')    : null;
+        // ← NEW: Parent ID URLs
+        $parentIdUrl  = $user->parent_id_url  ? $workerBaseUrl . '/' . ltrim($user->parent_id_url, '/')  : null;
+        $parentIdBack = $user->parent_id_url_back ? $workerBaseUrl . '/' . ltrim($user->parent_id_url_back, '/') : null;
 
         return response()->json([
             'status' => 'success',
             'data'   => [
-                'id'          => $user->id,
-                'first_name'  => $user->first_name,
-                'surname'     => $user->surname,
-                'email'       => $user->email,
-                'id_url'      => $idFrontUrl,
-                'id_url_back' => $idBackUrl,
+                'id'               => $user->id,
+                'first_name'       => $user->first_name,
+                'surname'          => $user->surname,
+                'email'            => $user->email,
+                'id_url'           => $idFrontUrl,
+                'id_url_back'      => $idBackUrl,
+                // ← NEW
+                'id_type'          => $user->id_type,
+                'is_dependent'     => $user->is_dependent ?? false,
+                'parent_id_url'    => $parentIdUrl,
+                'parent_id_url_back' => $parentIdBack,
             ],
         ]);
     }
@@ -364,9 +402,12 @@ class AuthController extends Controller
         $addressParts = array_filter([$user->house_block_lot_no, $user->street, $user->zone_purok]);
         $fullAddress  = implode(', ', $addressParts);
 
-        $photoUrl  = $user->url_photo    ? $workerBaseUrl . '/' . ltrim($user->url_photo, '/')    : null;
-        $idUrl     = $user->id_url       ? $workerBaseUrl . '/' . ltrim($user->id_url, '/')       : null;
-        $idUrlBack = $user->id_url_back  ? $workerBaseUrl . '/' . ltrim($user->id_url_back, '/')  : null;
+        $photoUrl     = $user->url_photo         ? $workerBaseUrl . '/' . ltrim($user->url_photo, '/')         : null;
+        $idUrl        = $user->id_url            ? $workerBaseUrl . '/' . ltrim($user->id_url, '/')            : null;
+        $idUrlBack    = $user->id_url_back       ? $workerBaseUrl . '/' . ltrim($user->id_url_back, '/')       : null;
+        // ← NEW: Parent ID URLs
+        $parentIdUrl  = $user->parent_id_url     ? $workerBaseUrl . '/' . ltrim($user->parent_id_url, '/')     : null;
+        $parentIdBack = $user->parent_id_url_back ? $workerBaseUrl . '/' . ltrim($user->parent_id_url_back, '/') : null;
 
         return response()->json([
             'status' => 'success',
@@ -385,6 +426,11 @@ class AuthController extends Controller
                 'url_photo'              => $photoUrl,
                 'id_url'                 => $idUrl,
                 'id_url_back'            => $idUrlBack,
+                // ← NEW
+                'id_type'                => $user->id_type,
+                'is_dependent'           => $user->is_dependent ?? false,
+                'parent_id_url'          => $parentIdUrl,
+                'parent_id_url_back'     => $parentIdBack,
                 'place_of_birth'         => $user->place_of_birth,
                 'religion'               => $user->religion,
                 'email'                  => $user->email,
@@ -426,21 +472,17 @@ class AuthController extends Controller
 
         $user = auth()->user();
 
-        // Delete old image from S3 if one exists
         if ($user->url_photo) {
             Storage::disk('s3')->delete($user->url_photo);
         }
 
-        // Store on S3 — putFile returns the full S3 key e.g. "profile-images/abc123.jpg"
         $path = Storage::disk('s3')->putFile('profile-images', $request->file('profileImage'));
-
-        // Save the raw S3 path (NOT a full URL) so every endpoint is consistent
         $user->url_photo = $path;
         $user->save();
 
         return response()->json([
             'success'   => true,
-            'url_photo' => $path,   // raw path — frontend builds the full URL
+            'url_photo' => $path,
             'message'   => 'Profile image uploaded successfully',
         ]);
     }
@@ -466,7 +508,7 @@ class AuthController extends Controller
 
         activity_log('User Logged In', 'login_attempt', 'Successful login', $user);
 
-        return response()->json(['status' => 'success', 'message' => 'Login successful',    'data' => $user  ])->withCookie($cookie);
+        return response()->json(['status' => 'success', 'message' => 'Login successful', 'data' => $user])->withCookie($cookie);
     }
 
     /**
@@ -499,7 +541,12 @@ class AuthController extends Controller
                 'marital_status'        => $user->marital_status,
                 'name_of_spouse'        => $user->name_of_spouse,
                 'date_of_birth'         => $user->date_of_birth,
-                'url_photo'             => $user->url_photo,   // RAW path — frontend builds full URL
+                'url_photo'             => $user->url_photo,
+                // ← NEW
+                'id_type'               => $user->id_type,
+                'is_dependent'          => $user->is_dependent ?? false,
+                'parent_id_url'         => $user->parent_id_url,
+                'parent_id_url_back'    => $user->parent_id_url_back,
                 'place_of_birth'        => $user->place_of_birth,
                 'religion'              => $user->religion,
                 'email'                 => $user->email,
@@ -548,10 +595,13 @@ class AuthController extends Controller
             'data'   => [
                 'id'          => $user->id,
                 'name'        => $fullName,
-                'url_photo'   => $user->url_photo,   // raw path — caller builds full URL if needed
+                'url_photo'   => $user->url_photo,
                 'role'        => $user->role ?? 'Staff',
                 'permissions' => $user->permissions ? json_decode($user->permissions) : [],
                 'status'      => $user->status,
+                // ← NEW
+                'is_dependent' => $user->is_dependent ?? false,
+                'id_type'      => $user->id_type,
             ],
         ], 200);
     }
@@ -687,4 +737,4 @@ class AuthController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Logged out successfully'])
             ->withCookie(cookie('auth_token', '', -1, '/', null, true, true, false, 'None'));
     }
-}   
+}

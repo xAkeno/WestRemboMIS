@@ -81,6 +81,14 @@ class User extends Authenticatable
         'password_reset_code',
         'password_reset_expires_at',
         'email_verified_at',
+
+        // Parent / Guardian Information
+        'parent_full_name',
+        'relationship_to_student',
+        'parent_id_type',
+        'parent_id_url',
+        'parent_id_url_back',
+        
     ];
 
 
@@ -92,6 +100,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        
     ];
 
     /**
@@ -104,6 +113,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_dependent' => 'boolean',
         ];
     }
     public function created_by_building(){
