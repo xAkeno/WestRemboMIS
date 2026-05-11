@@ -35,6 +35,7 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\QueueController;
 use App\Http\Controllers\ScheduleSlotController;
+use App\Http\Controllers\ReprintRequestController;
 // ─── Public routes ──────────────────────────────────────────────────────────
 Route::post('/login', [AuthController::class, 'supabaseLogin']);
 Route::post('/verify', [AuthController::class, 'verifyEmail']);
@@ -83,7 +84,10 @@ Route::prefix('queue')->group(function () {
     Route::delete('/cleanup', [QueueController::class, 'cleanup']);
 });
 
-
+    Route::post(
+        '/reprint-requests',
+        [ReprintRequestController::class, 'requestReprint']
+    );
 
 
 // ─── Authenticated routes ────────────────────────────────────────────────────
@@ -154,7 +158,6 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::get('/schedule-slots', [ScheduleSlotController::class, 'index']);
     Route::put('/schedule-slots/{id}', [ScheduleSlotController::class, 'update']);
     Route::delete('/schedule-slots/{id}', [ScheduleSlotController::class, 'destroy']);
-
 
     // routes/api.php
     // Route::post('schedules/{documentType}/{id}/no-show', [ScheduleController::class, 'markNoShow']);
