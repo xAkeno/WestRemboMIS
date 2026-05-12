@@ -146,6 +146,7 @@ Route::middleware([EnsureTokenIsValid::class])->group(function () {
     Route::post('/schedules', [ScheduleController::class, 'store']);
     Route::get('/schedules/{document_number}', [ScheduleController::class, 'showByDocumentNumber']);
     Route::put('/schedules/{document_number}/reschedule', [ScheduleController::class, 'reschedule']);
+    Route::put('/schedules/{document_number}/update-only', [ScheduleController::class, 'updateSchedule']);
 
     Route::get('/documents/pending', [ScheduleController::class, 'getPendingDocuments']);
 

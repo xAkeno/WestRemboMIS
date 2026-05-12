@@ -114,11 +114,7 @@ class ScheduleController extends Controller
             $userId
         );
 
-        $this->updateDocumentStatus(
-            $request->document_type,
-            $request->document_number,
-            'SCHEDULED'
-        );
+        $this->updateDocumentStatus($request->document_type, $request->document_number, 'REPRINT');
 
         return response()->json([
             'status'  => 'success',
@@ -301,5 +297,63 @@ class ScheduleController extends Controller
         $record = $model::where($column, $documentNumber)->first();
 
         return $record?->status;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | 🟢 UPDATE SCHEDULE DATE/TIME (no status change)
+    |--------------------------------------------------------------------------
+    */
+    public function updateSchedule(Request $request, string $documentNumber): JsonResponse
+    {
+        $request->validate([
+            'schedule_date' => 'required|date',
+            'schedule_time' => 'required',
+        ]);
+
+        $schedule = Schedule::where('document_number', $documentNumber)->first();
+
+        if (!$schedule) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Schedule not found.',
+            ], 404);
+        }
+
+        $slot = ScheduleSlot::where('document_type', $schedule->document_type)
+            ->where('schedule_time', $request->schedule_time)
+            ->first();
+
+        if (!$slot) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Selected slot does not exist.',
+            ], 404);
+        }
+
+        $count = Schedule::where('document_type', $schedule->document_type)
+            ->where('schedule_date', $request->schedule_date)
+            ->where('schedule_time', $request->schedule_time)
+            ->where('id', '!=', $schedule->id)
+            ->count();
+
+        if ($count >= $slot->max_slots) {
+            return response()->json([
+                'status'  => 'error',
+                'message' => 'Selected slot is already full.',
+            ], 422);
+        }
+
+        // ✅ Only update date/time — NO document status change
+        $schedule->update([
+            'schedule_date' => $request->schedule_date,
+            'schedule_time' => $request->schedule_time,
+        ]);
+
+        return response()->json([
+            'status'  => 'success',
+            'message' => 'Schedule updated successfully.',
+            'data'    => $schedule,
+        ]);
     }
 }
