@@ -11,32 +11,25 @@ class ServicesSeeder extends Seeder
     {
         $services = [
             [
-                'name' => 'Resident Registration',
-                'description' => 'Register as a resident of Barangay West Rembo to access various barangay services and programs.',
-                'requirements' => "Valid government ID\nProof of residence (utility bill, lease contract)\n2x2 ID photos (2 pieces)\nAccomplished registration form",
-                'processing_time' => '1-2 business days',
-                'fee' => 'Free',
-            ],
-            [
                 'name' => 'Barangay Clearance',
                 'description' => 'Obtain a clearance certificate from Barangay West Rembo.',
                 'requirements' => "Valid ID\nProof of residence\nClearance application form",
                 'processing_time' => '1 business day',
-                'fee' => 'Free',
+                'fee' => '25',
             ],
             [
                 'name' => 'Business Clearance',
                 'description' => 'Apply for a business clearance to operate legally in Barangay West Rembo.',
                 'requirements' => "Business permit\nValid ID\nCompleted application form",
                 'processing_time' => '2-3 business days',
-                'fee' => 'Free',
+                'fee' => '500',
             ],
             [
                 'name' => 'Building Clearance',
                 'description' => 'Obtain building clearance for construction or renovation.',
                 'requirements' => "Building permit\nID of applicant\nApplication form",
                 'processing_time' => '3-5 business days',
-                'fee' => 'Free',
+                'fee' => '1000',
             ],
             [
                 'name' => 'Barangay Certificate',
