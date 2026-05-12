@@ -84,10 +84,14 @@ Route::prefix('queue')->group(function () {
     Route::delete('/cleanup', [QueueController::class, 'cleanup']);
 });
 
-    Route::post(
-        '/reprint-requests',
-        [ReprintRequestController::class, 'requestReprint']
-    );
+    Route::post('/reprint-requests', [ReprintRequestController::class, 'requestReprint']);
+    Route::get('/reprint-requests', [ReprintRequestController::class, 'index']);
+    Route::get('/reprint-requests/{id}', [ReprintRequestController::class, 'show']);
+
+    Route::put('/reprint-requests/{id}/approve', [ReprintRequestController::class, 'approve']);
+    Route::put('/reprint-requests/{id}/reject', [ReprintRequestController::class, 'reject']);
+    Route::put('/reprint-requests/{id}/printed', [ReprintRequestController::class, 'markPrinted']);
+    Route::put('/reprint-requests/{id}/claimed', [ReprintRequestController::class, 'markClaimed']);
 
 
 // ─── Authenticated routes ────────────────────────────────────────────────────
