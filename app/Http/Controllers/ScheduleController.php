@@ -114,7 +114,7 @@ class ScheduleController extends Controller
             $userId
         );
 
-        // $this->updateDocumentStatus($request->document_type, $request->document_number, 'REPRINT');
+        $this->updateDocumentStatus($request->document_type, $request->document_number, 'SCHEDULED');
 
         return response()->json([
             'status'  => 'success',
