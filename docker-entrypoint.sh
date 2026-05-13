@@ -36,5 +36,8 @@ php artisan db:seed --class=SettingSeeder --force || echo "SettingSeeder skipped
 echo "▶ Seeding elected officials..."
 php artisan db:seed --class=ElectedOfficialsSeeder --force || echo "ElectedOfficialsSeeder skipped"
 
+echo "▶ Seeding schedule slots..."
+php artisan db:seed --class=ScheduleSlotSeeder --force || echo "ScheduleSlotSeeder skipped"
+
 echo "▶ Starting Laravel server..."
 php artisan serve --host=0.0.0.0 --port=${PORT:-10000}

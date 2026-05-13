@@ -1,25 +1,17 @@
 <?php
-// app/Http/Controllers/QueueController.php
-
-
 
 namespace App\Http\Controllers;
-
-
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
-
-
 use App\Models\QueueItem;
+use App\Models\User;
 use App\Models\BarangayClearance;
 use App\Models\BarangayCertificate;
 use App\Models\BarangayBuildingClearance;
 use App\Models\BarangayBusinessClearance;
-
-
 
 class QueueController extends Controller
 {
@@ -42,22 +34,60 @@ class QueueController extends Controller
         ],
     ];
 
-
-
-    // ─────────────────────────────────────────────
-    // CONFIG: Column name that holds the scheduled date in the source models.
-    // If your column is named differently (e.g. schedule_date,
-    // dry_seal_schedule_date, appointment_date), change this constant.
-    // ─────────────────────────────────────────────
     private const SCHEDULED_DATE_COLUMN = 'scheduled_date';
 
+    // Values that mean "not PWD" — anything else is treated as a PWD condition
+    private const NON_PWD_VALUES = ['', 'none', 'no', 'n/a', 'not pwd', 'false', '0'];
 
+    // ─────────────────────────────────────────────
+    // HELPER: Determine if a pwd_status string means the person IS a PWD
+    // ─────────────────────────────────────────────
+
+    private function isPwd(?string $pwdStatus): bool
+    {
+        if ($pwdStatus === null) return false;
+        return !in_array(strtolower(trim($pwdStatus)), self::NON_PWD_VALUES, true);
+    }
+
+    // ─────────────────────────────────────────────
+    // HELPER: Determine if a date_of_birth means the person is a senior (60+)
+    // ─────────────────────────────────────────────
+
+    private function isSenior(?string $dateOfBirth): bool
+    {
+        if (!$dateOfBirth) return false;
+        try {
+            return Carbon::parse($dateOfBirth)->age >= 60;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // HELPER: Resolve priority label for a user id
+    // Returns: "PWD & Senior" | "PWD" | "Senior" | null
+    // ─────────────────────────────────────────────
+
+    private function resolvePriority(?int $userId): ?string
+    {
+        if (!$userId) return null;
+
+        $user = User::find($userId);
+        if (!$user) return null;
+
+        $pwd    = $this->isPwd($user->pwd_status);
+        $senior = $this->isSenior($user->date_of_birth);
+
+        if ($pwd && $senior) return 'PWD & Senior';
+        if ($pwd)            return 'PWD';
+        if ($senior)         return 'Senior';
+
+        return null;
+    }
 
     // ─────────────────────────────────────────────
     // GET QUEUE (TODAY ONLY)
     // ─────────────────────────────────────────────
-
-
 
     public function index()
     {
@@ -66,142 +96,111 @@ class QueueController extends Controller
             ->orderBy('id')
             ->get();
 
-
-
-        // Enrich each queue item with applicant_name, business_name, and created_by
-        // by looking up the source document. The frontend uses created_by to
-        // determine PWD/Senior priority.
         $enriched = $queue->map(function ($q) {
             $config = $this->sources[$q->document_type] ?? null;
             if (!$config) {
                 return $q->toArray();
             }
 
-
-
             $doc = $config['model']::find($q->document_id);
             $arr = $q->toArray();
-
-
 
             if ($doc) {
                 $arr['applicant_name'] = $this->getApplicantName($doc);
                 $arr['business_name']  = $doc->business_name ?? $doc->establishment ?? null;
                 $arr['created_by']     = $doc->created_by ?? null;
+
+                // ── Priority fields ──────────────────────────────────────────
+                // Look up the applicant's user account and attach pwd_status,
+                // date_of_birth, and a pre-resolved priority_label so the
+                // frontend can display priority without extra API calls.
+                $createdBy = $doc->created_by ?? null;
+                if ($createdBy) {
+                    $user = User::find($createdBy);
+                    if ($user) {
+                        $arr['pwd_status']      = $user->pwd_status;    // raw string
+                        $arr['date_of_birth']   = $user->date_of_birth;
+                        $arr['priority_label']  = $this->resolvePriority($createdBy); // "PWD" | "Senior" | "PWD & Senior" | null
+                        $arr['is_priority']     = $arr['priority_label'] !== null;
+                    }
+                }
             }
-
-
 
             return $arr;
         });
 
-
-
         return response()->json([
             'status' => 'success',
-            'data'   => $enriched
+            'data'   => $enriched,
         ]);
     }
-
-
 
     // ─────────────────────────────────────────────
     // SEARCH BCERT NUMBER (For Manual/QR Add)
     // ─────────────────────────────────────────────
 
-
-
     public function searchBcert(Request $request)
     {
         $request->validate([
-            'bcert_number' => 'required|string',
-            'document_type' => 'required|string'
+            'bcert_number'  => 'required|string',
+            'document_type' => 'required|string',
+            'ref_number' => 'nullable|string', // Optional additional reference number for more specific searches
         ]);
-
-
 
         $config = $this->sources[$request->document_type] ?? null;
 
-
         if (!$config) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Invalid document type'
-            ], 400);
+            return response()->json(['status' => 'error', 'message' => 'Invalid document type'], 400);
         }
-
-
 
         $refField = $config['ref'];
-        $item = $config['model']::where($refField, $request->bcert_number)
-            ->first();
-
-
+        $item     = $config['model']::where($refField, $request->bcert_number)->first();
 
         if (!$item) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'No document found with that reference number'
-            ], 404);
+            return response()->json(['status' => 'error', 'message' => 'No document found with that reference number'], 404);
         }
 
-
-
-        // ─────────────────────────────────────────────
-        // GATE (TEMPORARY — FULLY OPEN):
-        // No status check. No scheduled_date check.
-        // Any document found by reference number is accepted.
-        // The scheduled_date is still surfaced in the response for display.
-        // TIGHTEN LATER:
-        //   1. Re-add a date check: $scheduledDate && $scheduledDate->isToday()
-        //   2. Re-add a status check: strtoupper((string) $item->status) === 'SCHEDULED'
-        // ─────────────────────────────────────────────
         $scheduledDateRaw = $item->{self::SCHEDULED_DATE_COLUMN} ?? null;
         $scheduledDate    = $scheduledDateRaw ? Carbon::parse($scheduledDateRaw) : null;
 
-
-
-        // Check if already in queue today
         $alreadyInQueue = QueueItem::where('document_type', $request->document_type)
             ->where('document_id', $item->id)
             ->whereDate('queue_date', today())
             ->whereIn('status', ['waiting', 'serving'])
             ->exists();
 
-
-
         $alreadyDone = QueueItem::where('document_type', $request->document_type)
             ->where('document_id', $item->id)
-            ->whereDate('queue_date', today())
+            ->whereDate('queue_date', today ())
             ->where('status', 'done')
             ->exists();
 
-
+        // Resolve priority for the search result preview
+        $createdBy     = $item->created_by ?? null;
+        $priorityLabel = $this->resolvePriority($createdBy);
 
         return response()->json([
             'status' => 'success',
-            'data' => [
-                'id'                => $item->id,
-                'reference_number'  => $item->{$refField},
-                'applicant_name'    => $this->getApplicantName($item),
-                'business_name'     => $item->business_name ?? $item->establishment ?? null,
-                'created_by'        => $item->created_by ?? null,
-                'already_in_queue'  => $alreadyInQueue,
-                'already_done'      => $alreadyDone,
-                'scheduled_date'    => $scheduledDate ? $scheduledDate->toDateString() : null,
-                'released_date'     => $scheduledDate ? $scheduledDate->toDateString() : null, // legacy alias for older frontend builds
-                'document_status'   => $item->status,
-            ]
+            'data'   => [
+                'id'               => $item->id,
+                'reference_number' => $item->{$refField},
+                'applicant_name'   => $this->getApplicantName($item),
+                'business_name'    => $item->business_name ?? $item->establishment ?? null,
+                'created_by'       => $createdBy,
+                'already_in_queue' => $alreadyInQueue,
+                'already_done'     => $alreadyDone,
+                'scheduled_date'   => $scheduledDate ? $scheduledDate->toDateString() : null,
+                'released_date'    => $scheduledDate ? $scheduledDate->toDateString() : null,
+                'document_status'  => $item->status,
+                'priority_label'   => $priorityLabel,   // "PWD" | "Senior" | "PWD & Senior" | null
+                'is_priority'      => $priorityLabel !== null,
+            ],
         ]);
     }
-
-
 
     // ─────────────────────────────────────────────
     // MANUAL ADD (For both Manual form and QR scan)
     // ─────────────────────────────────────────────
-
-
 
     public function manualAdd(Request $request)
     {
@@ -209,46 +208,33 @@ class QueueController extends Controller
             'document_type'    => 'required|string',
             'document_id'      => 'required|integer',
             'reference_number' => 'required|string',
-            'force'            => 'nullable|boolean'
+            'force'            => 'nullable|boolean',
         ]);
 
-
-
         $today = Carbon::today();
-
-
 
         $existing = QueueItem::where('document_type', $request->document_type)
             ->where('document_id', $request->document_id)
             ->whereDate('queue_date', $today)
             ->first();
 
-
-
-        // If exists and force is true, delete the existing entry
         if ($existing && $request->force) {
             $existing->delete();
-        }
-        // If exists and force is false, return error
-        elseif ($existing && !$request->force) {
+        } elseif ($existing && !$request->force) {
             $statusMessage = $existing->status === 'done'
                 ? 'This document was already processed today. Use force option to add again.'
                 : 'Already in queue today. Use force option to requeue.';
 
-
             return response()->json([
-                'status' => 'error',
+                'status'  => 'error',
                 'message' => $statusMessage,
-                'data' => [
-                    'existing_status' => $existing->status,
-                    'reference_number' => $existing->reference_number
-                ]
+                'data'    => [
+                    'existing_status'  => $existing->status,
+                    'reference_number' => $existing->reference_number,
+                ],
             ], 409);
         }
 
-
-
-        // Create new queue entry
         $queueItem = QueueItem::create([
             'document_type'    => $request->document_type,
             'document_id'      => $request->document_id,
@@ -258,23 +244,24 @@ class QueueController extends Controller
             'manual_added'     => true,
         ]);
 
+        // Attach created_by and priority fields to the response
+        $createdBy     = null;
+        $priorityLabel = null;
+        $config        = $this->sources[$request->document_type] ?? null;
 
-
-        // Look up created_by from the source document so the frontend
-        // can run its PWD/Senior priority check after a successful add.
-        $createdBy = null;
-        $config = $this->sources[$request->document_type] ?? null;
         if ($config) {
             $sourceDoc = $config['model']::find($request->document_id);
             $createdBy = $sourceDoc->created_by ?? null;
         }
 
+        if ($createdBy) {
+            $priorityLabel = $this->resolvePriority($createdBy);
+        }
 
-
-        $payload = $queueItem->toArray();
-        $payload['created_by'] = $createdBy;
-
-
+        $payload                  = $queueItem->toArray();
+        $payload['created_by']    = $createdBy;
+        $payload['priority_label'] = $priorityLabel;
+        $payload['is_priority']   = $priorityLabel !== null;
 
         return response()->json([
             'status'  => 'success',
@@ -283,129 +270,78 @@ class QueueController extends Controller
         ]);
     }
 
-
-
     // ─────────────────────────────────────────────
     // NEXT (CALL NEXT IN LINE)
     // ─────────────────────────────────────────────
-
-
 
     public function next()
     {
         DB::beginTransaction();
 
-
         try {
-            // Mark any currently-serving item back to waiting
             QueueItem::whereDate('queue_date', today())
                 ->where('status', 'serving')
                 ->update(['status' => 'waiting']);
-
-
 
             $next = QueueItem::whereDate('queue_date', today())
                 ->where('status', 'waiting')
                 ->orderBy('id')
                 ->first();
 
-
-
             if (!$next) {
                 DB::commit();
-                return response()->json([
-                    'status' => 'empty',
-                    'message' => 'No queue available'
-                ]);
+                return response()->json(['status' => 'empty', 'message' => 'No queue available']);
             }
 
-
-
             $next->update(['status' => 'serving']);
-
-
             DB::commit();
 
-
-
-            return response()->json([
-                'status' => 'success',
-                'data'   => $next
-            ]);
+            return response()->json(['status' => 'success', 'data' => $next]);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to call next'
-            ], 500);
+            return response()->json(['status' => 'error', 'message' => 'Failed to call next'], 500);
         }
     }
-
-
 
     // ─────────────────────────────────────────────
     // DONE (MARK AS DONE)
     // ─────────────────────────────────────────────
 
-
-
     public function done($id)
     {
         $item = QueueItem::findOrFail($id);
+        $item->update(['status' => 'done']);
 
-
-
-        $item->update([
-            'status' => 'done'
-        ]);
-
-
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Document marked as done'
-        ]);
+        return response()->json(['status' => 'success', 'message' => 'Document marked as done']);
     }
 
-
-
     // ─────────────────────────────────────────────
-    // CLEANUP OLD QUEUE ENTRIES (Optional - can be removed)
+    // CLEANUP OLD QUEUE ENTRIES
     // ─────────────────────────────────────────────
-
-
 
     public function cleanup()
     {
-        $today = Carbon::today();
-        $deleted = QueueItem::whereDate('queue_date', '<', $today)->delete();
-
+        $deleted = QueueItem::whereDate('queue_date', '<', Carbon::today())->delete();
 
         return response()->json([
-            'status' => 'success',
+            'status'  => 'success',
             'message' => "Cleaned up {$deleted} old queue entries",
-            'data' => ['deleted' => $deleted]
+            'data'    => ['deleted' => $deleted],
         ]);
     }
-
-
 
     // ─────────────────────────────────────────────
     // HELPER: Get applicant name from model
     // ─────────────────────────────────────────────
 
-
-
-    private function getApplicantName($item)
+    private function getApplicantName($item): string
     {
-        $nameParts = [];
+        $parts = array_filter([
+            $item->first_name  ?? null,
+            $item->middle_name ?? null,
+            $item->surname     ?? null,
+        ]);
 
-
-        if (isset($item->first_name)) $nameParts[] = $item->first_name;
-        if (isset($item->middle_name) && $item->middle_name) $nameParts[] = $item->middle_name;
-        if (isset($item->surname)) $nameParts[] = $item->surname;
-
-
-        return !empty($nameParts) ? implode(' ', $nameParts) : 'N/A';
+        return !empty($parts) ? implode(' ', $parts) : 'N/A';
     }
 }
